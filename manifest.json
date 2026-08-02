@@ -1,0 +1,22 @@
+{
+  "name": "Todo App",
+  "short_name": "Todos",
+  "description": "A todo app with repeatable tasks, importance, and emergence tracking",
+  "start_url": "/todo-app/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#3498db",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

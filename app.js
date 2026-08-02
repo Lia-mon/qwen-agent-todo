@@ -7,15 +7,66 @@ const todoList = document.getElementById('todo-list');
 const footer = document.getElementById('footer');
 const countEl = document.getElementById('count');
 
-let todos = JSON.parse(localStorage.getItem('todos')) || [];
+// ── IndexedDB Setup ──────────────────────────────────────────
 
-// Separate filter state for each dimension
-let statusFilter = 'all';
-let importanceFilter = 'all';
-let emergenceFilter = 'all';
+const DB_NAME = 'TodoAppDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'todos';
+let db = null;
+let todos = [];
 
-function save() {
-  localStorage.setItem('todos', JSON.stringify(todos));
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = event => {
+      const database = event.target.result;
+      if (!database.objectStoreNames.contains(STORE_NAME)) {
+        database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+
+    request.onsuccess = event => {
+      db = event.target.result;
+      resolve(db);
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function dbPut(todo) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put(todo);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function dbDelete(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function dbGetAll() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function loadTodos() {
+  todos = await dbGetAll();
 }
 
 // ── Timestamp helpers ──────────────────────────────────────────
@@ -55,8 +106,10 @@ function checkRepeatableTodos() {
   });
 
   if (changed) {
-    save();
-    render();
+    // Re-save all changed todos to IndexedDB
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    todos.forEach(todo => store.put(todo));
   }
 }
 
@@ -192,9 +245,9 @@ function updateFilterButtons() {
 
 // ── Actions ────────────────────────────────────────────────────
 
-function addTodo(text, repeat, importance, emergence) {
+async function addTodo(text, repeat, importance, emergence) {
   const now = Date.now();
-  todos.unshift({
+  const todo = {
     id: now,
     text,
     completed: false,
@@ -204,12 +257,13 @@ function addTodo(text, repeat, importance, emergence) {
     importance,
     emergence,
     nextRepeatDate: null
-  });
-  save();
+  };
+  todos.unshift(todo);
+  await dbPut(todo);
   render();
 }
 
-function toggleTodo(id) {
+async function toggleTodo(id) {
   const todo = todos.find(t => t.id === id);
   if (todo) {
     todo.completed = !todo.completed;
@@ -221,16 +275,22 @@ function toggleTodo(id) {
       todo.nextRepeatDate = Date.now() + periodMs;
     }
 
-    save();
+    await dbPut(todo);
     render();
   }
 }
 
-function deleteTodo(id) {
+async function deleteTodo(id) {
   todos = todos.filter(t => t.id !== id);
-  save();
+  await dbDelete(id);
   render();
 }
+
+// ── Filter state ───────────────────────────────────────────────
+
+let statusFilter = 'all';
+let importanceFilter = 'all';
+let emergenceFilter = 'all';
 
 // ── Events ─────────────────────────────────────────────────────
 
@@ -272,8 +332,48 @@ document.querySelectorAll('[data-efilter]').forEach(btn => {
   });
 });
 
+// ── Service Worker Registration ────────────────────────────────
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('Service Worker registered:', registration.scope);
+
+      // Notify the SW to start the background repeat checker
+      if (registration.active) {
+        registration.active.postMessage({ type: 'INIT_REPEAT_CHECKER' });
+      }
+
+      // Listen for SW messages (repeat check results, push sync)
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.type === 'PUSH_REPEAT_CHECK') {
+          loadTodos().then(() => {
+            checkRepeatableTodos();
+            render();
+          });
+        }
+      });
+
+      // Ask for notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+    } catch (err) {
+      console.error('Service Worker registration failed:', err);
+    }
+  });
+}
+
 // ── Init ───────────────────────────────────────────────────────
 
-checkRepeatableTodos();
-setInterval(checkRepeatableTodos, 5 * 60 * 1000);
-render();
+async function init() {
+  await openDB();
+  await loadTodos();
+  checkRepeatableTodos();
+  setInterval(checkRepeatableTodos, 5 * 60 * 1000);
+  render();
+}
+
+init();
