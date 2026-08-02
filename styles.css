@@ -41,16 +41,42 @@ body {
   font-weight: 600;
 }
 
-/* ── Creation Panel ─────────────────────────────────────────── */
+/* ── Dialog Modal ───────────────────────────────────────────── */
 
-#todo-form {
+#add-task-dialog {
+  border: none;
+  border-radius: 12px;
+  padding: 0;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  background: #fff;
+  color: #333;
+  margin:auto;
+}
+
+#add-task-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+#add-task-dialog form {
   display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
+  flex-direction: column;
+  padding: 24px;
+  gap: 12px;
+}
+
+.dialog-title {
+  font-size: 1.1rem;
+  color: #555;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
 }
 
 #todo-input {
-  flex: 1;
   padding: 10px 14px;
   font-size: 1rem;
   border: 2px solid #ddd;
@@ -63,7 +89,7 @@ body {
   border-color: #3498db;
 }
 
-#todo-form button {
+.dialog-submit {
   padding: 10px 20px;
   font-size: 1rem;
   background: #3498db;
@@ -72,19 +98,19 @@ body {
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s;
+  align-self: flex-end;
 }
 
-#todo-form button:hover {
+.dialog-submit:hover {
   background: #2980b9;
 }
 
-.extra-fields {
+.dialog-fields {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
-.extra-fields label {
+.dialog-fields label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -93,10 +119,10 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   flex: 1;
-  min-width: 120px;
 }
 
-.extra-fields select {
+.dialog-fields select,
+.dialog-fields input[type="datetime-local"] {
   padding: 6px 8px;
   font-size: 0.9rem;
   border: 2px solid #ddd;
@@ -107,8 +133,64 @@ body {
   transition: border-color 0.2s;
 }
 
-.extra-fields select:focus {
+.dialog-fields select:focus,
+.dialog-fields input[type="datetime-local"]:focus {
   border-color: #3498db;
+}
+
+.dialog-fields input[type="datetime-local"] {
+  min-width: 0;
+}
+
+#todo-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+#todo-form > label input[type="datetime-local"] {
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+#todo-form > label input[type="datetime-local"]:focus {
+  border-color: #3498db;
+}
+
+/* ── FAB Button ──────────────────────────────────────────────── */
+
+.fab-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: #3498db;
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 300;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+  transition: background 0.2s, transform 0.2s;
+  z-index: 100;
+}
+
+.fab-btn:hover {
+  background: #2980b9;
+  transform: scale(1.05);
 }
 
 /* ── Filters ────────────────────────────────────────────────── */
@@ -241,11 +323,12 @@ body {
 .badge.importance-medium { background: #fef5e7; color: #f39c12; }
 .badge.importance-low { background: #eaf6ff; color: #3498db; }
 
-.badge.emergence-high { background: #fdecea; color: #c0392b; }
-.badge.emergence-medium { background: #fef5e7; color: #d68910; }
-.badge.emergence-low { background: #eaf6ff; color: #2e86c1; }
+.badge.emergence-stress { background: #fdecea; color: #c0392b; }
+.badge.emergence-balance { background: #fef5e7; color: #d68910; }
+.badge.emergence-lax { background: #eaf6ff; color: #2e86c1; }
 
 .badge.repeatable { background: #eafaf1; color: #27ae60; }
+.badge.deadline { background: #f0f0f0; color: #666; font-size: 0.65rem; }
 
 .todo-item .timestamps {
   display: flex;
@@ -267,15 +350,16 @@ body {
   background: none;
   border: none;
   color: #e74c3c;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, transform 0.5s;
   flex-shrink: 0;
 }
 
 .todo-item:hover .delete-btn {
   opacity: 1;
+  transform: scale(1.5);
 }
 
 .empty-state {
@@ -297,5 +381,3 @@ body {
   font-size: 0.9rem;
   color: #888;
 }
-
-

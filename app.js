@@ -1,8 +1,11 @@
+const dialog = document.getElementById('add-task-dialog');
+const fabBtn = document.getElementById('fab-btn');
 const todoForm = document.getElementById('todo-form');
 const todoInput = document.getElementById('todo-input');
 const repeatSelect = document.getElementById('repeat-select');
 const importanceSelect = document.getElementById('importance-select');
-const emergenceSelect = document.getElementById('emergence-select');
+const deadlineInput = document.getElementById('deadline-input');
+const durationSelect = document.getElementById('duration-select');
 const todoList = document.getElementById('todo-list');
 const footer = document.getElementById('footer');
 const countEl = document.getElementById('count');
@@ -79,6 +82,45 @@ function formatTimestamp(ms) {
   });
 }
 
+function formatRemaining(ms) {
+  const absMs = Math.abs(ms);
+  const seconds = Math.floor(absMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (ms <= 0) return 'Overdue';
+  if (days > 0) return `${days}d left`;
+  if (hours > 0) return `${hours}h left`;
+  if (minutes > 0) return `${minutes}m left`;
+  return `${seconds}s left`;
+}
+
+// ── Duration helpers ───────────────────────────────────────────
+
+function getDurationMs(duration) {
+  if (duration === 'multi') return 3 * 60 * 60 * 1000; // 3 hours default
+  return parseInt(duration) * 60 * 1000;
+}
+
+function calculateEmergence(deadlineMs, duration) {
+  if (!deadlineMs) return 'balance';
+  const now = Date.now();
+  const durationMs = getDurationMs(duration);
+  const availableTime = deadlineMs - now;
+
+  if (availableTime <= 0) return 'stress';
+
+  const ratio = availableTime / durationMs;
+
+  // Time threshold depends on duration type
+  const timeThreshold = duration === 'multi' ? 2 * 24 * 60 * 60 * 1000 : 1 * 24 * 60 * 60 * 1000;
+
+  if (ratio > 5 && availableTime > timeThreshold) return 'lax';
+  if (ratio > 3) return 'balance';
+  return 'stress';
+}
+
 // ── Repeat logic ───────────────────────────────────────────────
 
 function getRepeatMs(repeat) {
@@ -91,7 +133,7 @@ function getRepeatMs(repeat) {
   }
 }
 
-function checkRepeatableTodos() {
+function checkTasks() {
   const now = Date.now();
   let changed = false;
 
@@ -106,7 +148,6 @@ function checkRepeatableTodos() {
   });
 
   if (changed) {
-    // Re-save all changed todos to IndexedDB
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     todos.forEach(todo => store.put(todo));
@@ -119,6 +160,7 @@ function checkRepeatableTodos() {
 function render() {
   todoList.innerHTML = '';
 
+  const now = Date.now();
   const filtered = todos.filter(todo => {
     // Status filter
     if (statusFilter === 'active' && todo.completed) return false;
@@ -127,8 +169,28 @@ function render() {
     // Importance filter
     if (importanceFilter !== 'all' && todo.importance !== importanceFilter) return false;
 
-    // Emergence filter
-    if (emergenceFilter !== 'all' && todo.emergence !== emergenceFilter) return false;
+    // Deadline filter
+    if (deadlineFilter !== 'all' && todo.deadline) {
+      const deadlineMs = todo.deadline;
+      if (deadlineFilter === 'overdue' && deadlineMs > now) return false;
+      if (deadlineFilter === 'today') {
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        if (deadlineMs > todayEnd.getTime()) return false;
+      }
+      if (deadlineFilter === 'week') {
+        const weekEnd = new Date();
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        weekEnd.setHours(23, 59, 59, 999);
+        if (deadlineMs > weekEnd.getTime()) return false;
+      }
+    }
+
+    // Emergence filter (computed on-the-fly)
+    if (emergenceFilter !== 'all') {
+      const taskEmergence = calculateEmergence(todo.deadline, todo.duration);
+      if (taskEmergence !== emergenceFilter) return false;
+    }
 
     return true;
   });
@@ -173,10 +235,11 @@ function render() {
       impBadge.textContent = todo.importance;
       meta.appendChild(impBadge);
 
-      // Emergence badge
+      // Emergence badge (computed on-the-fly)
       const emBadge = document.createElement('span');
-      emBadge.className = `badge emergence-${todo.emergence}`;
-      emBadge.textContent = 'emerge';
+      const taskEmergence = calculateEmergence(todo.deadline, todo.duration);
+      emBadge.className = `badge emergence-${taskEmergence}`;
+      emBadge.textContent = taskEmergence.charAt(0).toUpperCase() + taskEmergence.slice(1);
       meta.appendChild(emBadge);
 
       // Repeatable badge
@@ -185,6 +248,19 @@ function render() {
         repBadge.className = 'badge repeatable';
         repBadge.textContent = todo.repeat;
         meta.appendChild(repBadge);
+      }
+
+      // Deadline badge
+      if (todo.deadline) {
+        const dlBadge = document.createElement('span');
+        dlBadge.className = 'badge deadline';
+        const remaining = todo.deadline - now;
+        if (remaining <= 0) {
+          dlBadge.textContent = 'Overdue';
+        } else {
+          dlBadge.textContent = formatRemaining(remaining);
+        }
+        meta.appendChild(dlBadge);
       }
 
       textArea.append(textEl, meta);
@@ -230,6 +306,7 @@ function updateFilterButtons() {
   document.querySelectorAll('.filter-btn').forEach(btn => {
     const filter = btn.dataset.filter;
     const ifilter = btn.dataset.ifilter;
+    const dfilter = btn.dataset.dfilter;
     const efilter = btn.dataset.efilter;
 
     if (filter !== undefined) {
@@ -237,6 +314,9 @@ function updateFilterButtons() {
     }
     if (ifilter !== undefined) {
       btn.classList.toggle('active', ifilter === importanceFilter);
+    }
+    if (dfilter !== undefined) {
+      btn.classList.toggle('active', dfilter === deadlineFilter);
     }
     if (efilter !== undefined) {
       btn.classList.toggle('active', efilter === emergenceFilter);
@@ -246,8 +326,10 @@ function updateFilterButtons() {
 
 // ── Actions ────────────────────────────────────────────────────
 
-async function addTodo(text, repeat, importance, emergence) {
+async function addTodo(text, repeat, importance, deadlineStr, duration) {
   const now = Date.now();
+  // Convert datetime-local string to timestamp (handle timezone correctly)
+  const deadlineMs = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   const todo = {
     id: now,
     text,
@@ -256,7 +338,8 @@ async function addTodo(text, repeat, importance, emergence) {
     completedAt: null,
     repeat,
     importance,
-    emergence,
+    deadline: deadlineMs,
+    duration,
     nextRepeatDate: null
   };
   todos.unshift(todo);
@@ -282,6 +365,7 @@ async function toggleTodo(id) {
 }
 
 async function deleteTodo(id) {
+  if (!confirm('Are you sure you want to delete this task?')) return;
   todos = todos.filter(t => t.id !== id);
   await dbDelete(id);
   render();
@@ -291,10 +375,25 @@ async function deleteTodo(id) {
 
 let statusFilter = 'all';
 let importanceFilter = 'all';
+let deadlineFilter = 'all';
 let emergenceFilter = 'all';
 
 // ── Events ─────────────────────────────────────────────────────
 
+// Open dialog
+fabBtn.addEventListener('click', () => {
+  dialog.showModal();
+  todoInput.focus();
+});
+
+// Close dialog when backdrop is clicked
+dialog.addEventListener('click', e => {
+  if (e.target === dialog) {
+    dialog.close();
+  }
+});
+
+// Handle form submission
 todoForm.addEventListener('submit', e => {
   e.preventDefault();
   const text = todoInput.value.trim();
@@ -303,9 +402,11 @@ todoForm.addEventListener('submit', e => {
       text,
       repeatSelect.value,
       importanceSelect.value,
-      emergenceSelect.value
+      deadlineInput.value,
+      durationSelect.value
     );
     todoInput.value = '';
+    dialog.close();
   }
 });
 
@@ -321,6 +422,14 @@ document.querySelectorAll('[data-filter]').forEach(btn => {
 document.querySelectorAll('[data-ifilter]').forEach(btn => {
   btn.addEventListener('click', () => {
     importanceFilter = btn.dataset.ifilter;
+    render();
+  });
+});
+
+// Deadline filters
+document.querySelectorAll('[data-dfilter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    deadlineFilter = btn.dataset.dfilter;
     render();
   });
 });
@@ -350,7 +459,7 @@ if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', event => {
         if (event.data && event.data.type === 'PUSH_REPEAT_CHECK') {
           loadTodos().then(() => {
-            checkRepeatableTodos();
+            checkTasks();
           });
         }
       });
@@ -371,8 +480,9 @@ if ('serviceWorker' in navigator) {
 async function init() {
   await openDB();
   await loadTodos();
-  checkRepeatableTodos();
-  setInterval(checkRepeatableTodos, 5 * 60 * 1000);
+  checkTasks();
+  setInterval(checkTasks, 5 * 60 * 1000);
+  setInterval(render, 60 * 1000); // Update deadline badges & emergence every minute
   render();
 }
 

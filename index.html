@@ -10,47 +10,8 @@
 </head>
 <body>
  <div class="container">
-    <!-- ── Task Creation Panel ──────────────────────────────────── -->
-    <section class="panel creation-panel">
-      <form id="todo-form">
-        <input type="text" id="todo-input" placeholder="What needs to be done?" autofocus>
-        <button type="submit">Add</button>
-      </form>
-
-      <div class="extra-fields">
-        <label>
-          Repeatable
-          <select id="repeat-select">
-            <option value="">None</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="30s">30s (test)</option>
-          </select>
-        </label>
-        <label>
-         Importance
-          <select id="importance-select">
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="low">Low</option>
-          </select>
-        </label>
-        <label>
-         Emergence
-          <select id="emergence-select">
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="low">Low</option>
-          </select>
-        </label>
-      </div>
-    </section>
-
     <!-- ── Task Rendering Panel ───────────────────────────────── -->
     <section class="panel task-panel">
-      <h2 class="panel-title">Tasks</h2>
-
       <div class="filters">
         <div class="filter-group">
           <span class="filter-group-label">Status</span>
@@ -68,11 +29,19 @@
         </div>
 
         <div class="filter-group">
+          <span class="filter-group-label">Deadline</span>
+          <button class="filter-btn deadline-filter active" data-dfilter="all">All</button>
+          <button class="filter-btn deadline-filter" data-dfilter="overdue">Overdue</button>
+          <button class="filter-btn deadline-filter" data-dfilter="today">Today</button>
+          <button class="filter-btn deadline-filter" data-dfilter="week">This Week</button>
+        </div>
+
+        <div class="filter-group">
           <span class="filter-group-label">Emergence</span>
           <button class="filter-btn emergence-filter active" data-efilter="all">All</button>
-          <button class="filter-btn emergence-filter" data-efilter="high">High</button>
-          <button class="filter-btn emergence-filter" data-efilter="medium">Med</button>
-          <button class="filter-btn emergence-filter" data-efilter="low">Low</button>
+          <button class="filter-btn emergence-filter" data-efilter="stress">Stress</button>
+          <button class="filter-btn emergence-filter" data-efilter="balance">Balance</button>
+          <button class="filter-btn emergence-filter" data-efilter="lax">Lax</button>
         </div>
       </div>
 
@@ -83,6 +52,53 @@
       </footer>
     </section>
   </div>
+
+  <!-- ── Add Task Dialog ──────────────────────────────────────── -->
+  <dialog id="add-task-dialog">
+    <form id="todo-form" method="dialog">
+      <h3 class="dialog-title">New Task</h3>
+      <input type="text" id="todo-input" placeholder="What needs to be done?" required>
+
+      <div class="dialog-fields">
+        <label>
+          Repeatable
+          <select id="repeat-select">
+            <option value="">None</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="30s">30s (test)</option>
+          </select>
+        </label>
+        <label>
+          Importance
+          <select id="importance-select">
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <label>
+          Duration
+          <select id="duration-select">
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="30">30 min</option>
+            <option value="60">1 hr</option>
+            <option value="multi">Multiple hours</option>
+          </select>
+        </label>
+      </div>
+        <label>
+          Deadline
+          <input type="datetime-local" id="deadline-input">
+        </label>
+      <button type="submit" class="dialog-submit">Add</button>
+    </form>
+  </dialog>
+
+  <!-- ── FAB Button ───────────────────────────────────────────── -->
+  <button id="fab-btn" class="fab-btn" title="Add Task">+</button>
 
   <script src="app.js"></script>
 </body>

@@ -51,9 +51,9 @@ self.addEventListener('message', event => {
 });
 
 function startRepeatChecker() {
-  checkRepeatableTodos();
+  checkTasks();
   setInterval(() => {
-    checkRepeatableTodos();
+    checkTasks();
   }, REPEAT_CHECK_INTERVAL);
 }
 
@@ -67,7 +67,7 @@ function getRepeatMs(repeat) {
   }
 }
 
-function checkRepeatableTodos() {
+function checkTasks() {
   // Read todos from IndexedDB directly in the service worker
   const DB_NAME = 'TodoAppDB';
   const STORE_NAME = 'todos';
