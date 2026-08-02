@@ -110,6 +110,7 @@ function checkRepeatableTodos() {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     todos.forEach(todo => store.put(todo));
+    render();
   }
 }
 
@@ -350,7 +351,6 @@ if ('serviceWorker' in navigator) {
         if (event.data && event.data.type === 'PUSH_REPEAT_CHECK') {
           loadTodos().then(() => {
             checkRepeatableTodos();
-            render();
           });
         }
       });
