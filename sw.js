@@ -1,15 +1,15 @@
 /** @type {string} */
-const CACHE_NAME = 'todo-app-v1';
+const CACHE_NAME = 'todo-app-v2';
 
 /** @type {string[]} */
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.json',
-  '/icon-192x192.png',
-  '/icon-512x512.png'
+  '/qwen-agent-todo/',
+  '/qwen-agent-todo/index.html',
+  '/qwen-agent-todo/styles.css',
+  '/qwen-agent-todo/app.js',
+  '/qwen-agent-todo/manifest.json',
+  '/qwen-agent-todo/icon-192x192.png',
+  '/qwen-agent-todo/icon-512x512.png'
 ];
 
 // ── Install & Activate ────────────────────────────────────────
