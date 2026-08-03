@@ -47,6 +47,12 @@ const footer = document.getElementById('footer');
 /** @type {HTMLElement} */
 const countEl = document.getElementById('count');
 
+/** @type {HTMLButtonElement} */
+const dialogCancel = document.getElementById('dialog-cancel');
+
+/** @type {HTMLButtonElement} */
+const dialogDelete = document.getElementById('dialog-delete');
+
 // ── IndexedDB Setup ──────────────────────────────────────────
 
 /** @type {string} */
@@ -63,6 +69,24 @@ let db = null;
 
 /** @type {Todo[]} */
 let todos = [];
+
+/** @type {number | null} */
+let editingTodoId = null;
+
+/**
+ * Converts a millisecond timestamp to a datetime-local string for the input.
+ * @param {number} ms - Unix timestamp in milliseconds.
+ * @returns {string} datetime-local formatted string.
+ */
+function msToDatetimeLocal(ms) {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${mo}-${da}T${h}:${mi}`;
+}
 
 /**
  * Opens the IndexedDB database and creates the todos object store if it doesn't exist.
@@ -401,6 +425,13 @@ function render() {
       // deleteBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.append(checkbox, textArea);
+
+      // Click task to edit
+      li.addEventListener('click', (e) => {
+        if (e.target === checkbox || checkbox.contains(e.target)) return;
+        openEditDialog(todo);
+      });
+
       todoList.appendChild(li);
     });
   }
@@ -449,6 +480,27 @@ function updateFilterButtons() {
  * @param {string} duration
  * @returns {Promise<void>}
  */
+/**
+ * Opens the dialog in edit mode, pre-filling fields with the task's values.
+ * @param {Todo} todo - The task to edit.
+ */
+function openEditDialog(todo) {
+  editingTodoId = todo.id;
+
+  todoInput.value = todo.text;
+  repeatSelect.value = todo.repeat || '';
+  importanceSelect.value = todo.importance;
+  durationSelect.value = todo.duration || '5';
+  deadlineInput.value = todo.deadline ? msToDatetimeLocal(todo.deadline) : '';
+
+  document.querySelector('.dialog-title').textContent = 'Edit Task';
+  document.querySelector('.dialog-submit').textContent = 'Save';
+  dialogDelete.style.display = 'inline-block';
+
+  dialog.showModal();
+  todoInput.focus();
+}
+
 async function addTodo(text, repeat, importance, deadlineStr, duration) {
   const now = Date.now();
   // Convert datetime-local string to timestamp (handle timezone correctly)
@@ -466,6 +518,30 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
     nextRepeatDate: null
   };
   todos.unshift(todo);
+  await dbPut(todo);
+  render();
+}
+
+/**
+ * Updates an existing task with new values, persists to IndexedDB, and re-renders.
+ * @param {number} id - Todo ID to update.
+ * @param {string} text - New task description.
+ * @param {string} repeat - New repeat schedule.
+ * @param {'high' | 'medium' | 'low'} importance - New priority level.
+ * @param {string | null} deadlineStr - New datetime-local string.
+ * @param {string} duration - New duration string.
+ * @returns {Promise<void>}
+ */
+async function updateTodo(id, text, repeat, importance, deadlineStr, duration) {
+  const todo = todos.find(t => t.id === id);
+  if (!todo) return;
+
+  todo.text = text;
+  todo.repeat = repeat || null;
+  todo.importance = importance;
+  todo.duration = duration;
+  todo.deadline = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
+
   await dbPut(todo);
   render();
 }
@@ -526,9 +602,17 @@ fabBtn.addEventListener('click', () => {
   todoInput.focus();
 });
 
-// Close dialog when backdrop is clicked
-dialog.addEventListener('click', e => {
-  if (e.target === dialog) {
+// Cancel button
+dialogCancel.addEventListener('click', () => {
+  resetDialog();
+  dialog.close();
+});
+
+// Delete button
+dialogDelete.addEventListener('click', () => {
+  if (editingTodoId !== null) {
+    deleteTodo(editingTodoId);
+    resetDialog();
     dialog.close();
   }
 });
@@ -537,7 +621,22 @@ dialog.addEventListener('click', e => {
 todoForm.addEventListener('submit', e => {
   e.preventDefault();
   const text = todoInput.value.trim();
-  if (text) {
+  if (!text) return;
+
+  if (editingTodoId !== null) {
+    // Edit mode
+    updateTodo(
+      editingTodoId,
+      text,
+      repeatSelect.value,
+      importanceSelect.value,
+      deadlineInput.value,
+      durationSelect.value
+    );
+    resetDialog();
+    dialog.close();
+  } else {
+    // Add mode
     addTodo(
       text,
       repeatSelect.value,
@@ -549,6 +648,17 @@ todoForm.addEventListener('submit', e => {
     dialog.close();
   }
 });
+
+/**
+ * Resets the dialog to its default "add" state.
+ */
+function resetDialog() {
+  editingTodoId = null;
+  document.querySelector('.dialog-title').textContent = 'New Task';
+  document.querySelector('.dialog-submit').textContent = 'Add';
+  dialogDelete.style.display = 'none';
+  todoForm.reset();
+}
 
 // Status filters
 document.querySelectorAll('[data-filter]').forEach(btn => {

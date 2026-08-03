@@ -126,6 +126,44 @@ body {
   background: #2980b9;
 }
 
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dialog-cancel {
+  padding: 10px 20px;
+  font-size: 1rem;
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dialog-cancel:hover {
+  background: #c0392b;
+}
+
+.dialog-delete {
+  padding: 10px 20px;
+  font-size: 1rem;
+  background: transparent;
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dialog-delete:hover {
+  background: #e74c3c;
+  color: #fff;
+}
+
 .dialog-fields {
   display: flex;
   gap: 12px;
