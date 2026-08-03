@@ -1,4 +1,7 @@
+/** @type {string} */
 const CACHE_NAME = 'todo-app-v1';
+
+/** @type {string[]} */
 const urlsToCache = [
   '/',
   '/index.html',
@@ -42,14 +45,19 @@ self.addEventListener('fetch', event => {
 
 // ── Background Repeat Checker ─────────────────────────────────
 
+/** @type {number} */
 const REPEAT_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
-
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'INIT_REPEAT_CHECKER') {
     startRepeatChecker();
   }
 });
 
+/**
+ * Starts the background repeat checker: runs once immediately,
+ * then every 5 minutes via setInterval.
+ * @returns {void}
+ */
 function startRepeatChecker() {
   checkTasks();
   setInterval(() => {
@@ -57,6 +65,11 @@ function startRepeatChecker() {
   }, REPEAT_CHECK_INTERVAL);
 }
 
+/**
+ * Converts a repeat schedule string to milliseconds.
+ * @param {string} repeat
+ * @returns {number | null}
+ */
 function getRepeatMs(repeat) {
   switch (repeat) {
     case 'daily':   return 24 * 60 * 60 * 1000;
@@ -67,6 +80,13 @@ function getRepeatMs(repeat) {
   }
 }
 
+/**
+ * Background task checker running in the service worker.
+ * Reads todos from IndexedDB, re-emerges applicable repeatable tasks,
+ * writes updates back, notifies the page via postMessage,
+ * and sends a push notification if permission is granted.
+ * @returns {void}
+ */
 function checkTasks() {
   // Read todos from IndexedDB directly in the service worker
   const DB_NAME = 'TodoAppDB';

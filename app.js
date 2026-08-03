@@ -1,23 +1,73 @@
+/**
+ * @typedef {Object} Todo
+ * @property {number} id - Unix timestamp used as unique identifier
+ * @property {string} text - Task description
+ * @property {boolean} completed - Whether the task is completed
+ * @property {number} createdAt - Unix timestamp of task creation
+ * @property {number | null} completedAt - Unix timestamp of completion (null if active)
+ * @property {string | null} repeat - Repeat schedule: 'daily' | 'weekly' | 'monthly' | '30s' | '' | null
+ * @property {'high' | 'medium' | 'low'} importance - Task priority level
+ * @property {number | null} deadline - Unix timestamp of deadline (null if none)
+ * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
+ * @property {number | null} nextRepeatDate - Next re-emergence timestamp
+ */
+
+// ── DOM References ─────────────────────────────────────────────
+
+/** @type {HTMLDialogElement} */
 const dialog = document.getElementById('add-task-dialog');
+
+/** @type {HTMLButtonElement} */
 const fabBtn = document.getElementById('fab-btn');
+
+/** @type {HTMLFormElement} */
 const todoForm = document.getElementById('todo-form');
+
+/** @type {HTMLInputElement} */
 const todoInput = document.getElementById('todo-input');
+
+/** @type {HTMLSelectElement} */
 const repeatSelect = document.getElementById('repeat-select');
+
+/** @type {HTMLSelectElement} */
 const importanceSelect = document.getElementById('importance-select');
+
+/** @type {HTMLInputElement} */
 const deadlineInput = document.getElementById('deadline-input');
+
+/** @type {HTMLSelectElement} */
 const durationSelect = document.getElementById('duration-select');
+
+/** @type {HTMLUListElement} */
 const todoList = document.getElementById('todo-list');
+
+/** @type {HTMLElement} */
 const footer = document.getElementById('footer');
+
+/** @type {HTMLElement} */
 const countEl = document.getElementById('count');
 
 // ── IndexedDB Setup ──────────────────────────────────────────
 
+/** @type {string} */
 const DB_NAME = 'TodoAppDB';
+
+/** @type {number} */
 const DB_VERSION = 1;
+
+/** @type {string} */
 const STORE_NAME = 'todos';
+
+/** @type {IDBDatabase | null} */
 let db = null;
+
+/** @type {Todo[]} */
 let todos = [];
 
+/**
+ * Opens the IndexedDB database and creates the todos object store if it doesn't exist.
+ * @returns {Promise<IDBDatabase>}
+ */
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -38,6 +88,11 @@ function openDB() {
   });
 }
 
+/**
+ * Writes or updates a todo in IndexedDB.
+ * @param {Todo} todo
+ * @returns {Promise<void>}
+ */
 function dbPut(todo) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -48,6 +103,11 @@ function dbPut(todo) {
   });
 }
 
+/**
+ * Deletes a todo by its ID from IndexedDB.
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
 function dbDelete(id) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -58,6 +118,10 @@ function dbDelete(id) {
   });
 }
 
+/**
+ * Reads all todos from IndexedDB.
+ * @returns {Promise<Todo[]>}
+ */
 function dbGetAll() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -68,12 +132,21 @@ function dbGetAll() {
   });
 }
 
+/**
+ * Loads all todos from IndexedDB into the in-memory `todos` array.
+ * @returns {Promise<void>}
+ */
 async function loadTodos() {
   todos = await dbGetAll();
 }
 
 // ── Timestamp helpers ──────────────────────────────────────────
 
+/**
+ * Formats a Unix timestamp (ms) into a human-readable date string.
+ * @param {number} ms - Unix timestamp in milliseconds
+ * @returns {string}
+ */
 function formatTimestamp(ms) {
   const d = new Date(ms);
   return d.toLocaleString(undefined, {
@@ -82,6 +155,11 @@ function formatTimestamp(ms) {
   });
 }
 
+/**
+ * Formats a remaining time in milliseconds into a human-readable countdown string.
+ * @param {number} ms - Milliseconds remaining (negative means overdue)
+ * @returns {string}
+ */
 function formatRemaining(ms) {
   const absMs = Math.abs(ms);
   const seconds = Math.floor(absMs / 1000);
@@ -98,11 +176,22 @@ function formatRemaining(ms) {
 
 // ── Duration helpers ───────────────────────────────────────────
 
+/**
+ * Converts a duration string to milliseconds.
+ * @param {string} duration - Duration value ('5', '10', '30', '60', 'multi')
+ * @returns {number} Milliseconds, or 3 hours for 'multi'
+ */
 function getDurationMs(duration) {
   if (duration === 'multi') return 3 * 60 * 60 * 1000; // 3 hours default
   return parseInt(duration) * 60 * 1000;
 }
 
+/**
+ * Calculates the emergence level based on available time vs required duration.
+ * @param {number | null} deadlineMs - Unix timestamp of deadline
+ * @param {string | null} duration - Duration string
+ * @returns {'stress' | 'balance' | 'lax'}
+ */
 function calculateEmergence(deadlineMs, duration) {
   if (!deadlineMs) return 'balance';
   const now = Date.now();
@@ -123,6 +212,11 @@ function calculateEmergence(deadlineMs, duration) {
 
 // ── Repeat logic ───────────────────────────────────────────────
 
+/**
+ * Converts a repeat schedule string to milliseconds.
+ * @param {string} repeat - Repeat schedule string
+ * @returns {number | null} Milliseconds, or null if 'None'
+ */
 function getRepeatMs(repeat) {
   switch (repeat) {
     case 'daily':   return 24 * 60 * 60 * 1000;
@@ -133,6 +227,11 @@ function getRepeatMs(repeat) {
   }
 }
 
+/**
+ * Checks for tasks that need to re-emerge based on their repeat schedule,
+ * then saves changes to IndexedDB and triggers a UI re-render.
+ * @returns {void}
+ */
 function checkTasks() {
   const now = Date.now();
   let changed = false;
@@ -157,6 +256,11 @@ function checkTasks() {
 
 // ── Render ─────────────────────────────────────────────────────
 
+/**
+ * Renders the filtered and sorted todo list to the DOM.
+ * Updates the footer count and active filter button states.
+ * @returns {void}
+ */
 function render() {
   todoList.innerHTML = '';
 
@@ -302,6 +406,10 @@ function render() {
   updateFilterButtons();
 }
 
+/**
+ * Highlights the currently active filter buttons based on filter state.
+ * @returns {void}
+ */
 function updateFilterButtons() {
   document.querySelectorAll('.filter-btn').forEach(btn => {
     const filter = btn.dataset.filter;
@@ -326,6 +434,15 @@ function updateFilterButtons() {
 
 // ── Actions ────────────────────────────────────────────────────
 
+/**
+ * Creates a new todo, saves it to IndexedDB, and re-renders.
+ * @param {string} text
+ * @param {string} repeat
+ * @param {'high' | 'medium' | 'low'} importance
+ * @param {string | null} deadlineStr - datetime-local string (e.g. '2026-08-02T15:30')
+ * @param {string} duration
+ * @returns {Promise<void>}
+ */
 async function addTodo(text, repeat, importance, deadlineStr, duration) {
   const now = Date.now();
   // Convert datetime-local string to timestamp (handle timezone correctly)
@@ -347,6 +464,11 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
   render();
 }
 
+/**
+ * Toggles a todo's completion status, updates IndexedDB, and re-renders.
+ * @param {number} id - Todo ID
+ * @returns {Promise<void>}
+ */
 async function toggleTodo(id) {
   const todo = todos.find(t => t.id === id);
   if (todo) {
@@ -364,6 +486,11 @@ async function toggleTodo(id) {
   }
 }
 
+/**
+ * Deletes a todo after user confirmation.
+ * @param {number} id - Todo ID
+ * @returns {Promise<void>}
+ */
 async function deleteTodo(id) {
   if (!confirm('Are you sure you want to delete this task?')) return;
   todos = todos.filter(t => t.id !== id);
@@ -373,9 +500,16 @@ async function deleteTodo(id) {
 
 // ── Filter state ───────────────────────────────────────────────
 
+/** @type {'all' | 'active' | 'completed'} */
 let statusFilter = 'all';
+
+/** @type {'all' | 'high' | 'medium' | 'low'} */
 let importanceFilter = 'all';
+
+/** @type {'all' | 'overdue' | 'today' | 'week'} */
 let deadlineFilter = 'all';
+
+/** @type {'all' | 'stress' | 'balance' | 'lax'} */
 let emergenceFilter = 'all';
 
 // ── Events ─────────────────────────────────────────────────────
@@ -477,6 +611,10 @@ if ('serviceWorker' in navigator) {
 
 // ── Init ───────────────────────────────────────────────────────
 
+/**
+ * Initializes the application: opens DB, loads todos, starts background checkers, and renders.
+ * @returns {Promise<void>}
+ */
 async function init() {
   await openDB();
   await loadTodos();
