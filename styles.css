@@ -357,7 +357,6 @@ body {
   padding: 12px 0;
   border-bottom: 1px solid #eee;
   animation: fadeIn 0.2s ease;
-  cursor: pointer;
 }
 
 @keyframes fadeIn {
@@ -394,6 +393,7 @@ body {
 .todo-item .text-area {
   flex: 1;
   min-width: 0;
+  cursor: pointer;
 }
 
 .todo-item .text {

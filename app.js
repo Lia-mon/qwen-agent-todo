@@ -423,6 +423,12 @@ function render() {
 
       textArea.appendChild(timestamps);
 
+      // Click task to edit
+      textArea.addEventListener('click', (e) => {
+        if (e.target === checkbox || checkbox.contains(e.target)) return;
+        openEditDialog(todo);
+      });
+
       // Delete button
       // const deleteBtn = document.createElement('button');
       // deleteBtn.className = 'delete-btn';
@@ -431,12 +437,6 @@ function render() {
       // deleteBtn.addEventListener('click', () => deleteTodo(todo.id));
 
       li.append(checkbox, textArea);
-
-      // Click task to edit
-      li.addEventListener('click', (e) => {
-        if (e.target === checkbox || checkbox.contains(e.target)) return;
-        openEditDialog(todo);
-      });
 
       todoList.appendChild(li);
     });
