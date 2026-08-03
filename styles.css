@@ -22,7 +22,7 @@ body {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  padding: 24px;
+  padding: 15px;
   display: flex;
   flex-direction: column;
   height:95vh;
@@ -255,12 +255,52 @@ body {
 
 /* ── Filters ────────────────────────────────────────────────── */
 
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #eee;
+}
+
+.filter-toggle {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: #f0f0f0;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
+
+.filter-toggle:hover {
+  background: #e0e0e0;
+}
+
+.filter-toggle.active {
+  background: #3498db;
+  color: #fff;
+}
+
 .filters {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 8px;
+  width:100%;
   padding-bottom: 16px;
-  border-bottom: 1px solid #eee;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+}
+
+.filters.expanded {
+  max-height: fit-content;
+  opacity: 1;
 }
 
 .filter-group {
@@ -317,6 +357,7 @@ body {
   padding: 12px 0;
   border-bottom: 1px solid #eee;
   animation: fadeIn 0.2s ease;
+  cursor: pointer;
 }
 
 @keyframes fadeIn {

@@ -53,6 +53,12 @@ const dialogCancel = document.getElementById('dialog-cancel');
 /** @type {HTMLButtonElement} */
 const dialogDelete = document.getElementById('dialog-delete');
 
+/** @type {HTMLButtonElement} */
+const filterToggle = document.getElementById('filter-toggle');
+
+/** @type {HTMLElement} */
+const filtersPanel = document.querySelector('.filters');
+
 // ── IndexedDB Setup ──────────────────────────────────────────
 
 /** @type {string} */
@@ -690,6 +696,12 @@ document.querySelectorAll('[data-ufilter]').forEach(btn => {
     urgencyFilter = btn.dataset.ufilter;
     render();
   });
+});
+
+// Filter toggle
+filterToggle.addEventListener('click', () => {
+  const isExpanded = filtersPanel.classList.toggle('expanded');
+  filterToggle.classList.toggle('active', isExpanded);
 });
 
 // ── Service Worker Registration ────────────────────────────────
