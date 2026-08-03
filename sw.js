@@ -3,13 +3,13 @@ const CACHE_NAME = 'todo-app-v2';
 
 /** @type {string[]} */
 const urlsToCache = [
-  '/qwen-agent-todo/',
-  '/qwen-agent-todo/index.html',
-  '/qwen-agent-todo/styles.css',
-  '/qwen-agent-todo/app.js',
-  '/qwen-agent-todo/manifest.json',
-  '/qwen-agent-todo/icon-192x192.png',
-  '/qwen-agent-todo/icon-512x512.png'
+  './',
+  './index.html',
+  './styles.css',
+  './app.js',
+  './manifest.json',
+  './icon-192x192.png',
+  './icon-512x512.png'
 ];
 
 // ── Install & Activate ────────────────────────────────────────
@@ -161,8 +161,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: body,
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
+      icon: './icon-192x192.png',
+      badge: './icon-192x192.png',
       tag: 'repeat-task'
     })
   );
