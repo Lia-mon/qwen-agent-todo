@@ -2,7 +2,7 @@
 const CACHE_NAME = 'todo-app-v2';
 
 /** @type {string[]} */
-const urlsToCache = [
+const STATIC_RESOURCES = [
   './',
   './index.html',
   './styles.css',
@@ -17,7 +17,7 @@ const urlsToCache = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
+      .then(cache => cache.addAll(STATIC_RESOURCES))
   );
   self.skipWaiting();
 });
