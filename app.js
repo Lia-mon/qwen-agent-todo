@@ -9,7 +9,7 @@
  * @property {'high' | 'medium' | 'low'} importance - Task priority level
  * @property {number | null} deadline - Unix timestamp of deadline (null if none)
  * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
- * @property {number | null} nextRepeatDate - Next re-emergence timestamp
+ * @property {number | null} nextRepeatDate - Next re-urgency timestamp
  */
 
 // ── DOM References ─────────────────────────────────────────────
@@ -187,18 +187,24 @@ function getDurationMs(duration) {
 }
 
 /**
- * Calculates the emergence level based on available time vs required duration.
+ * Calculates the urgency level based on available time vs required duration.
  * @param {number | null} deadlineMs - Unix timestamp of deadline
  * @param {string | null} duration - Duration string
- * @returns {'stress' | 'balance' | 'lax'}
+ * @returns {'stressy' | 'balanced' | 'lax'}
  */
-function calculateEmergence(deadlineMs, duration) {
-  if (!deadlineMs) return 'balance';
+/**
+ * Calculates the urgency level of a task based on deadline and duration.
+ * @param {number|null} deadlineMs - Deadline as a millisecond timestamp.
+ * @param {string} duration - Duration string (e.g. '5', '10', '30', '60', 'multi').
+ * @returns {'stressy' | 'balanced' | 'lax'} The computed urgency level.
+ */
+function calculateUrgency(deadlineMs, duration) {
+  if (!deadlineMs) return 'balanced';
   const now = Date.now();
   const durationMs = getDurationMs(duration);
   const availableTime = deadlineMs - now;
 
-  if (availableTime <= 0) return 'stress';
+  if (availableTime <= 0) return 'stressy';
 
   const ratio = availableTime / durationMs;
 
@@ -206,8 +212,8 @@ function calculateEmergence(deadlineMs, duration) {
   const timeThreshold = duration === 'multi' ? 2 * 24 * 60 * 60 * 1000 : 1 * 24 * 60 * 60 * 1000;
 
   if (ratio > 5 && availableTime > timeThreshold) return 'lax';
-  if (ratio > 3) return 'balance';
-  return 'stress';
+  if (ratio > 3) return 'balanced';
+  return 'stressy';
 }
 
 // ── Repeat logic ───────────────────────────────────────────────
@@ -290,10 +296,10 @@ function render() {
       }
     }
 
-    // Emergence filter (computed on-the-fly)
-    if (emergenceFilter !== 'all') {
-      const taskEmergence = calculateEmergence(todo.deadline, todo.duration);
-      if (taskEmergence !== emergenceFilter) return false;
+    // Urgency filter (computed on-the-fly)
+    if (urgencyFilter !== 'all') {
+      const taskUrgency = calculateUrgency(todo.deadline, todo.duration);
+      if (taskUrgency !== urgencyFilter) return false;
     }
 
     return true;
@@ -339,11 +345,11 @@ function render() {
       impBadge.textContent = todo.importance;
       meta.appendChild(impBadge);
 
-      // Emergence badge (computed on-the-fly)
+      // Urgency badge (computed on-the-fly)
       const emBadge = document.createElement('span');
-      const taskEmergence = calculateEmergence(todo.deadline, todo.duration);
-      emBadge.className = `badge emergence-${taskEmergence}`;
-      emBadge.textContent = taskEmergence.charAt(0).toUpperCase() + taskEmergence.slice(1);
+      const taskUrgency = calculateUrgency(todo.deadline, todo.duration);
+      emBadge.className = `badge urgency-${taskUrgency}`;
+      emBadge.textContent = taskUrgency.charAt(0).toUpperCase() + taskUrgency.slice(1);
       meta.appendChild(emBadge);
 
       // Repeatable badge
@@ -388,13 +394,13 @@ function render() {
       textArea.appendChild(timestamps);
 
       // Delete button
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.innerHTML = '&times;';
-      deleteBtn.title = 'Delete';
-      deleteBtn.addEventListener('click', () => deleteTodo(todo.id));
+      // const deleteBtn = document.createElement('button');
+      // deleteBtn.className = 'delete-btn';
+      // deleteBtn.innerHTML = '&times;';
+      // deleteBtn.title = 'Delete';
+      // deleteBtn.addEventListener('click', () => deleteTodo(todo.id));
 
-      li.append(checkbox, textArea, deleteBtn);
+      li.append(checkbox, textArea);
       todoList.appendChild(li);
     });
   }
@@ -415,7 +421,7 @@ function updateFilterButtons() {
     const filter = btn.dataset.filter;
     const ifilter = btn.dataset.ifilter;
     const dfilter = btn.dataset.dfilter;
-    const efilter = btn.dataset.efilter;
+    const ufilter = btn.dataset.ufilter;
 
     if (filter !== undefined) {
       btn.classList.toggle('active', filter === statusFilter);
@@ -426,8 +432,8 @@ function updateFilterButtons() {
     if (dfilter !== undefined) {
       btn.classList.toggle('active', dfilter === deadlineFilter);
     }
-    if (efilter !== undefined) {
-      btn.classList.toggle('active', efilter === emergenceFilter);
+    if (ufilter !== undefined) {
+      btn.classList.toggle('active', ufilter === urgencyFilter);
     }
   });
 }
@@ -509,8 +515,8 @@ let importanceFilter = 'all';
 /** @type {'all' | 'overdue' | 'today' | 'week'} */
 let deadlineFilter = 'all';
 
-/** @type {'all' | 'stress' | 'balance' | 'lax'} */
-let emergenceFilter = 'all';
+/** @type {'all' | 'stressy' | 'balanced' | 'lax'} */
+let urgencyFilter = 'all';
 
 // ── Events ─────────────────────────────────────────────────────
 
@@ -568,10 +574,10 @@ document.querySelectorAll('[data-dfilter]').forEach(btn => {
   });
 });
 
-// Emergence filters
-document.querySelectorAll('[data-efilter]').forEach(btn => {
+// Urgency filters
+document.querySelectorAll('[data-ufilter]').forEach(btn => {
   btn.addEventListener('click', () => {
-    emergenceFilter = btn.dataset.efilter;
+    urgencyFilter = btn.dataset.ufilter;
     render();
   });
 });
@@ -620,7 +626,7 @@ async function init() {
   await loadTodos();
   checkTasks();
   setInterval(checkTasks, 5 * 60 * 1000);
-  setInterval(render, 60 * 1000); // Update deadline badges & emergence every minute
+  setInterval(render, 60 * 1000); // Update deadline badges & urgency every minute
   render();
 }
 

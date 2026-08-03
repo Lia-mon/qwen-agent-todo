@@ -41,13 +41,11 @@ body {
 @media (max-width: 1043px){
     body{
         width:100%;
-        max-width:835px;
     }
 }
 @media (max-width: 600px) {
   body {
     width:100%;
-    max-width: 100%;
     padding-top: 0;
     padding-bottom: 0px;
   }
@@ -350,9 +348,9 @@ body {
 .badge.importance-medium { background: #fef5e7; color: #f39c12; }
 .badge.importance-low { background: #eaf6ff; color: #3498db; }
 
-.badge.emergence-stress { background: #fdecea; color: #c0392b; }
-.badge.emergence-balance { background: #fef5e7; color: #d68910; }
-.badge.emergence-lax { background: #eaf6ff; color: #2e86c1; }
+.badge.urgency-stressy { background: #fdecea; color: #c0392b; }
+.badge.urgency-balanced { background: #fef5e7; color: #d68910; }
+.badge.urgency-lax { background: #eaf6ff; color: #2e86c1; }
 
 .badge.repeatable { background: #eafaf1; color: #27ae60; }
 .badge.deadline { background: #f0f0f0; color: #666; font-size: 0.65rem; }
