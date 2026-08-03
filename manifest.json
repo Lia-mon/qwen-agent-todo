@@ -2,7 +2,7 @@
   "name": "Todo App",
   "short_name": "Todos",
   "description": "A todo app with repeatable tasks, importance, and urgency tracking",
-  "start_url": "/qwen-todo-app/",
+  "start_url": "/qwen-agent-todo/",
   "display": "standalone",
   "background_color": "#f5f5f5",
   "theme_color": "#3498db",
