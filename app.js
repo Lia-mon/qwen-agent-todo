@@ -1,15 +1,17 @@
 /**
  * @typedef {Object} Todo
- * @property {number} id - Unix timestamp used as unique identifier
+ * @property {number} id - Auto-generated unique identifier (IndexedDB autoIncrement)
  * @property {string} text - Task description
- * @property {boolean} completed - Whether the task is completed
  * @property {number} createdAt - Unix timestamp of task creation
- * @property {number | null} completedAt - Unix timestamp of completion (null if active)
+ * @property {number} [completedAt] - Unix timestamp when task was completed (null if not completed)
+ * @property {number} completed - Completion flag: 0 (active) or 1 (completed)
+ * @property {number} deleted - Deletion flag: 0 (active) or 1 (trashed)
+ * @property {number | null} deletedAt - Unix timestamp when task was deleted (null if not deleted)
  * @property {string | null} repeat - Repeat schedule: 'daily' | 'weekly' | 'monthly' | '30s' | '' | null
  * @property {'high' | 'medium' | 'low'} importance - Task priority level
  * @property {number | null} deadline - Unix timestamp of deadline (null if none)
  * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
- * @property {number | null} nextRepeatDate - Next re-urgency timestamp
+ * @property {number} [nextRepeatDate] - Next re-emergence timestamp (only for completed repeatable tasks)
  */
 
 // ── DOM References ─────────────────────────────────────────────
@@ -38,8 +40,9 @@ const deadlineInput = document.getElementById('deadline-input');
 /** @type {HTMLSelectElement} */
 const durationSelect = document.getElementById('duration-select');
 
-/** @type {HTMLUListElement} */
+/** @type {HTMLElement} */
 const todoList = document.getElementById('todo-list');
+if (!todoList) console.error('todoList is null!');
 
 /** @type {HTMLElement} */
 const footer = document.getElementById('footer');
@@ -74,52 +77,49 @@ const STORE_NAME = 'todos';
 let db = null;
 
 /** @type {Todo[]} */
-let todos = [];
+let active = [];
+
+/** @type {Todo[]} */
+let completed = [];
+
+/** @type {Todo[]} */
+let deleted = [];
 
 /** @type {number | null} */
 let editingTodoId = null;
 
 /**
- * Converts a millisecond timestamp to a datetime-local string for the input.
- * @param {number} ms - Unix timestamp in milliseconds.
- * @returns {string} datetime-local formatted string.
- */
-function msToDatetimeLocal(ms) {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const da = String(d.getDate()).padStart(2, '0');
-  const h = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${y}-${mo}-${da}T${h}:${mi}`;
-}
-
-/**
- * Opens the IndexedDB database and creates the todos object store if it doesn't exist.
- * @returns {Promise<IDBDatabase>}
+ * Opens the IndexedDB database with a single 'todos' store and indexes.
+ * @returns {Promise<void>}
  */
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = event => {
+    request.onupgradeneeded = (event) => {
       const database = event.target.result;
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: 'id' });
-      }
+      const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      store.createIndex('deleted', 'deleted', { unique: false });
+      store.createIndex('completed', 'completed', { unique: false });
+      store.createIndex('createdAt', 'createdAt', { unique: false });
+      store.createIndex('completedAt', 'completedAt', { unique: false });
     };
 
-    request.onsuccess = event => {
-      db = event.target.result;
-      resolve(db);
+    request.onsuccess = () => {
+      db = request.result;
+      resolve();
     };
 
     request.onerror = () => reject(request.error);
+
+    request.onblocked = () => {
+      console.warn('DB upgrade blocked — another tab has the DB open. Close it and reload.');
+    };
   });
 }
 
 /**
- * Writes or updates a todo in IndexedDB.
+ * Inserts or updates a todo in the store.
  * @param {Todo} todo
  * @returns {Promise<void>}
  */
@@ -127,14 +127,29 @@ function dbPut(todo) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    store.put(todo);
-    tx.oncomplete = () => resolve();
+    const request = store.put(todo);
+    tx.oncomplete = () => resolve(request.result);
     tx.onerror = () => reject(tx.error);
   });
 }
 
 /**
- * Deletes a todo by its ID from IndexedDB.
+ * Inserts a new todo into the store (autoIncrement ID).
+ * @param {Todo} todo
+ * @returns {Promise<number>} The assigned ID.
+ */
+function dbAdd(todo) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.add(todo);
+    tx.oncomplete = () => resolve(request.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/**
+ * Deletes a todo by ID.
  * @param {number} id
  * @returns {Promise<void>}
  */
@@ -149,46 +164,95 @@ function dbDelete(id) {
 }
 
 /**
- * Reads all todos from IndexedDB.
+ * Retrieves active todos (deleted = 0, completed = 0).
  * @returns {Promise<Todo[]>}
  */
-function dbGetAll() {
+function dbGetActive() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
-    const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
+    const request = store.openCursor();
+    const results = [];
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.deleted === 0 && cursor.value.completed === 0) results.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
     request.onerror = () => reject(request.error);
   });
 }
 
 /**
- * Loads all todos from IndexedDB into the in-memory `todos` array.
- * @returns {Promise<void>}
+ * Retrieves completed todos (completed = 1, deleted = 0).
+ * @returns {Promise<Todo[]>}
  */
-async function loadTodos() {
-  todos = await dbGetAll();
-}
-
-// ── Timestamp helpers ──────────────────────────────────────────
-
-/**
- * Formats a Unix timestamp (ms) into a human-readable date string.
- * @param {number} ms - Unix timestamp in milliseconds
- * @returns {string}
- */
-function formatTimestamp(ms) {
-  const d = new Date(ms);
-  return d.toLocaleString(undefined, {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
+function dbGetCompleted() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.openCursor();
+    const results = [];
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.deleted === 0 && cursor.value.completed === 1) results.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
+    request.onerror = () => reject(request.error);
   });
 }
 
 /**
- * Formats a remaining time in milliseconds into a human-readable countdown string.
- * @param {number} ms - Milliseconds remaining (negative means overdue)
- * @returns {string}
+ * Retrieves deleted todos (deleted = 1).
+ * @returns {Promise<Todo[]>}
+ */
+function dbGetDeleted() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.openCursor();
+    const results = [];
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.deleted === 1) results.push(cursor.value);
+        cursor.continue();
+      } else {
+        resolve(results);
+      }
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ── Timestamp Formatting ──────────────────────────────────────
+
+/**
+ * Converts a millisecond timestamp to a formatted date string.
+ * @param {number} timestamp - Unix timestamp in milliseconds.
+ * @returns {string} Formatted date string.
+ */
+function formatTimestamp(timestamp) {
+  const d = new Date(timestamp);
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hour = String(d.getHours()).padStart(2, '0');
+  const minute = String(d.getMinutes()).padStart(2, '0');
+  const second = String(d.getSeconds()).padStart(2, '0');
+  return `${month}/${day} ${hour}:${minute}:${second}`;
+}
+
+/**
+ * Formats a remaining time in milliseconds to a human-readable string.
+ * @param {number} ms - Remaining time in milliseconds.
+ * @returns {string} Formatted remaining time.
  */
 function formatRemaining(ms) {
   const absMs = Math.abs(ms);
@@ -197,255 +261,601 @@ function formatRemaining(ms) {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (ms <= 0) return 'Overdue';
-  if (days > 0) return `${days}d left`;
-  if (hours > 0) return `${hours}h left`;
-  if (minutes > 0) return `${minutes}m left`;
-  return `${seconds}s left`;
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
 }
-
-// ── Duration helpers ───────────────────────────────────────────
 
 /**
  * Converts a duration string to milliseconds.
- * @param {string} duration - Duration value ('5', '10', '30', '60', 'multi')
- * @returns {number} Milliseconds, or 3 hours for 'multi'
+ * @param {string | null} duration
+ * @returns {number} Duration in milliseconds.
  */
 function getDurationMs(duration) {
-  if (duration === 'multi') return 3 * 60 * 60 * 1000; // 3 hours default
-  return parseInt(duration) * 60 * 1000;
+  if (duration === 'multi') return 3 * 60 * 60 * 1000;
+  return (parseInt(duration) || 5) * 60 * 1000;
 }
 
-/**
- * Calculates the urgency level based on available time vs required duration.
- * @param {number | null} deadlineMs - Unix timestamp of deadline
- * @param {string | null} duration - Duration string
- * @returns {'stressy' | 'balanced' | 'lax'}
- */
+// ── Urgency Calculation ───────────────────────────────────────
+
 /**
  * Calculates the urgency level of a task based on deadline and duration.
- * @param {number|null} deadlineMs - Deadline as a millisecond timestamp.
- * @param {string} duration - Duration string (e.g. '5', '10', '30', '60', 'multi').
- * @returns {'stressy' | 'balanced' | 'lax'} The computed urgency level.
+ * @param {number | null} deadline - Deadline timestamp or null.
+ * @param {string | null} duration - Duration string or null.
+ * @returns {'stressy' | 'balanced' | 'lax'} Urgency level.
  */
-function calculateUrgency(deadlineMs, duration) {
-  if (!deadlineMs) return 'balanced';
+function calculateUrgency(deadline, duration) {
+  if (!deadline) return 'lax';
   const now = Date.now();
   const durationMs = getDurationMs(duration);
-  const availableTime = deadlineMs - now;
+  const availableTime = deadline - now;
 
   if (availableTime <= 0) return 'stressy';
 
   const ratio = availableTime / durationMs;
 
-  // Time threshold depends on duration type
-  const timeThreshold = duration === 'multi' ? 2 * 24 * 60 * 60 * 1000 : 1 * 24 * 60 * 60 * 1000;
+  // Multi-hour tasks need more buffer
+  const timeThreshold = duration === 'multi' ? 2 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 
+  if (ratio <= 3) return 'stressy';
   if (ratio > 5 && availableTime > timeThreshold) return 'lax';
-  if (ratio > 3) return 'balanced';
-  return 'stressy';
+  return 'balanced';
 }
 
-// ── Repeat logic ───────────────────────────────────────────────
-
 /**
- * Converts a repeat schedule string to milliseconds.
- * @param {string} repeat - Repeat schedule string
- * @returns {number | null} Milliseconds, or null if 'None'
+ * Gets the repeat interval in milliseconds for a given schedule.
+ * @param {string} repeat - Repeat schedule string.
+ * @returns {number} Interval in milliseconds.
  */
 function getRepeatMs(repeat) {
   switch (repeat) {
-    case 'daily':   return 24 * 60 * 60 * 1000;
-    case 'weekly':  return 7 * 24 * 60 * 60 * 1000;
+    case 'daily': return 24 * 60 * 60 * 1000;
+    case 'weekly': return 7 * 24 * 60 * 60 * 1000;
     case 'monthly': return 30 * 24 * 60 * 60 * 1000;
-    case '30s':     return 30 * 1000;
-    default:        return null;
+    case '30s': return 30 * 1000;
+    default: return 0;
   }
 }
 
+// ── Notification ──────────────────────────────────────────────
+
 /**
- * Checks for tasks that need to re-emerge based on their repeat schedule,
- * then saves changes to IndexedDB and triggers a UI re-render.
- * @returns {void}
+ * Sends a grouped notification for task changes (re-emerges + urgency changes).
+ * @param {{ type: string; text: string; from?: string; to?: string }[]} changes
+ */
+function sendGroupedNotification(changes) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const reEmerges = changes.filter(c => c.type === 're-emerged');
+  const urgencyChanges = changes.filter(c => c.type === 'urgency-change');
+
+  let title;
+  if (reEmerges.length && urgencyChanges.length) {
+    title = `${reEmerges.length} task${'s'} re-emerged, ${urgencyChanges.length} urgency change${urgencyChanges.length > 1 ? 's' : ''}`;
+  } else if (reEmerges.length) {
+    title = `${reEmerges.length} task${reEmerges.length > 1 ? 's' : ''} re-emerged`;
+  } else {
+    title = `${urgencyChanges.length} urgency change${urgencyChanges.length > 1 ? 's' : ''}`;
+  }
+
+  let body;
+  if (reEmerges.length && urgencyChanges.length) {
+    body = [...reEmerges.slice(0, 3), ...urgencyChanges.slice(0, 3)]
+      .map(c => c.type === 're-emerged' ? `🔄 ${c.text}` : `⚡ ${c.text}: ${c.from} → ${c.to}`)
+      .join('\n');
+  } else if (reEmerges.length) {
+    body = reEmerges.map(c => `🔄 ${c.text}`).join('\n');
+  } else {
+    body = urgencyChanges.map(c => `⚡ ${c.text}: ${c.from} → ${c.to}`).join('\n');
+  }
+
+  new Notification(title, {
+    body: body || 'Tasks updated',
+    icon: './icon-192x192.png',
+    tag: 'todo-updates'
+  });
+}
+
+// ── Background Check ──────────────────────────────────────────
+
+/**
+ * Checks repeatable tasks for re-emergence, tracks urgency changes, and purges old trash.
+ * Runs every 5 minutes via setInterval.
  */
 function checkTasks() {
   const now = Date.now();
   let changed = false;
+  const changes = [];
+  const changedIds = new Set();
+  let purgedCount = 0;
 
-  todos.forEach(todo => {
-    if (!todo.repeat || !todo.completed) return;
-    if (now >= todo.nextRepeatDate) {
-      todo.completed = false;
+  // Check completed repeatable tasks for re-emergence
+  for (let i = 0; i < completed.length; i++) {
+    const todo = completed[i];
+    if (todo.repeat && todo.nextRepeatDate && now >= todo.nextRepeatDate) {
+      changes.push({ type: 're-emerged', text: todo.text });
+      todo.completed = 0;
       todo.completedAt = null;
       todo.nextRepeatDate = now + getRepeatMs(todo.repeat);
       changed = true;
+      changedIds.add(todo.id);
+      // Move back to active
+      const idx = completed.indexOf(todo);
+      if (idx > -1) completed.splice(idx, 1);
+      active.push(todo);
     }
+  }
+
+  // Urgency check on active todos only
+  active.forEach(todo => {
+    const urgency = calculateUrgency(todo.deadline, todo.duration);
+    const prev = lastUrgencyMap.get(todo.id);
+    if (prev && prev !== urgency) {
+      changed = true;
+      changes.push({ type: 'urgency-change', text: todo.text, from: prev, to: urgency });
+    }
+    lastUrgencyMap.set(todo.id, urgency);
   });
 
-  if (changed) {
+  // Auto-purge trash older than 30 days
+  for (let i = deleted.length - 1; i >= 0; i--) {
+    const todo = deleted[i];
+    if (todo.deletedAt && (now - todo.deletedAt) > 30 * 24 * 60 * 60 * 1000) {
+      purgedCount++;
+      deleted.splice(i, 1);
+    }
+  }
+
+  // Persist changed items to DB
+  if (changedIds.size > 0) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    todos.forEach(todo => store.put(todo));
+    for (const id of changedIds) {
+      const todo = active.find(t => t.id === id);
+      if (todo) store.put(todo);
+    }
+  }
+
+  // Purge trash older than 30 days (already spliced above — just delete from DB)
+  if (purgedCount > 0) {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    deleted.forEach(todo => {
+      if (todo.deletedAt && (now - todo.deletedAt) > 30 * 24 * 60 * 60 * 1000) {
+        store.delete(todo.id);
+      }
+    });
+  }
+
+  if (changed) {
     render();
+    sendGroupedNotification(changes);
   }
 }
 
-// ── Render ─────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────
+
+/** In-memory urgency tracking — populated on init, updated in checkTasks */
+const lastUrgencyMap = new Map();
 
 /**
- * Renders the filtered and sorted todo list to the DOM.
- * Updates the footer count and active filter button states.
- * @returns {void}
+ * Builds a DOM element for a single todo item.
+ * Extracted from render() for targeted DOM updates.
+ * @param {Object} todo - The todo object
+ * @param {'active' | 'completed' | 'deleted'} view - Which section this belongs to
+ * @returns {HTMLElement}
  */
-function render() {
-  todoList.innerHTML = '';
-
+function buildItem(todo, view) {
   const now = Date.now();
-  const filtered = todos.filter(todo => {
-    // Status filter
-    if (statusFilter === 'active' && todo.completed) return false;
-    if (statusFilter === 'completed' && !todo.completed) return false;
+  const li = document.createElement('li');
+  li.className = `todo-item${view === 'completed' ? ' completed' : ''}${view === 'deleted' ? ' trash-item' : ''}`;
+  li.dataset.id = todo.id;
 
-    // Importance filter
-    if (importanceFilter !== 'all' && todo.importance !== importanceFilter) return false;
+  if (view === 'deleted') {
+    const textArea = document.createElement('div');
+    textArea.className = 'text-area';
 
-    // Deadline filter
-    if (deadlineFilter !== 'all' && todo.deadline) {
-      const deadlineMs = todo.deadline;
-      if (deadlineFilter === 'overdue' && deadlineMs > now) return false;
-      if (deadlineFilter === 'today') {
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
-        if (deadlineMs > todayEnd.getTime()) return false;
-      }
-      if (deadlineFilter === 'week') {
-        const weekEnd = new Date();
-        weekEnd.setDate(weekEnd.getDate() + 7);
-        weekEnd.setHours(23, 59, 59, 999);
-        if (deadlineMs > weekEnd.getTime()) return false;
-      }
+    const textEl = document.createElement('span');
+    textEl.className = 'text';
+    textEl.textContent = todo.text;
+    textEl.style.textDecoration = 'line-through';
+    textEl.style.color = '#aaa';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+
+    const impBadge = document.createElement('span');
+    impBadge.className = `badge importance-${todo.importance}`;
+    impBadge.textContent = todo.importance;
+    meta.appendChild(impBadge);
+
+    if (todo.repeat) {
+      const repBadge = document.createElement('span');
+      repBadge.className = 'badge repeatable';
+      repBadge.textContent = todo.repeat;
+      meta.appendChild(repBadge);
     }
 
-    // Urgency filter (computed on-the-fly)
-    if (urgencyFilter !== 'all') {
-      const taskUrgency = calculateUrgency(todo.deadline, todo.duration);
-      if (taskUrgency !== urgencyFilter) return false;
+    textArea.append(textEl, meta);
+
+    const timestamps = document.createElement('div');
+    timestamps.className = 'timestamps';
+
+    const createdSpan = document.createElement('span');
+    createdSpan.className = 'timestamp created';
+    createdSpan.textContent = 'created: ' + formatTimestamp(todo.createdAt);
+    timestamps.appendChild(createdSpan);
+
+    if (todo.completedAt) {
+      const completedSpan = document.createElement('span');
+      completedSpan.className = 'timestamp completed';
+      completedSpan.textContent = `completed: ${formatTimestamp(todo.completedAt)}`;
+      timestamps.appendChild(completedSpan);
     }
 
-    return true;
-  });
+    const deletedSpan = document.createElement('span');
+    deletedSpan.className = 'timestamp deleted';
+    deletedSpan.textContent = 'deleted: ' + formatTimestamp(todo.deletedAt);
+    timestamps.appendChild(deletedSpan);
 
-  // Sort: active first (newest first), then completed (most recently completed first)
-  filtered.sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    const aTime = a.completedAt || a.createdAt;
-    const bTime = b.completedAt || b.createdAt;
-    return bTime - aTime;
-  });
+    textArea.appendChild(timestamps);
 
-  if (filtered.length === 0) {
-    const msg = todos.length === 0
-      ? 'No todos yet. Add one above!'
-      : 'No tasks match the current filters.';
-    todoList.innerHTML = `<li class="empty-state">${msg}</li>`;
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'trash-actions';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'trash-btn restore-btn';
+    restoreBtn.dataset.action = 'restore';
+    restoreBtn.dataset.id = todo.id;
+    restoreBtn.textContent = 'Restore';
+
+    const permDeleteBtn = document.createElement('button');
+    permDeleteBtn.className = 'trash-btn perm-delete-btn';
+    permDeleteBtn.dataset.action = 'perm-delete';
+    permDeleteBtn.dataset.id = todo.id;
+    permDeleteBtn.textContent = 'Delete Forever';
+
+    actionsDiv.append(restoreBtn, permDeleteBtn);
+    li.append(textArea, actionsDiv);
   } else {
-    filtered.forEach(todo => {
-      const li = document.createElement('li');
-      li.className = `todo-item${todo.completed ? ' completed' : ''}`;
+    const checkbox = document.createElement('div');
+    checkbox.className = 'checkbox';
+    checkbox.dataset.action = 'toggle';
+    checkbox.dataset.id = todo.id;
 
-      // Checkbox
-      const checkbox = document.createElement('div');
-      checkbox.className = 'checkbox';
-      checkbox.addEventListener('click', () => toggleTodo(todo.id));
+    const textArea = document.createElement('div');
+    textArea.className = 'text-area';
+    textArea.dataset.action = 'edit';
+    textArea.dataset.id = todo.id;
 
-      // Text area (text + meta badges)
-      const textArea = document.createElement('div');
-      textArea.className = 'text-area';
+    const textEl = document.createElement('span');
+    textEl.className = 'text';
+    textEl.textContent = todo.text;
 
-      const textEl = document.createElement('span');
-      textEl.className = 'text';
-      textEl.textContent = todo.text;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
 
-      const meta = document.createElement('div');
-      meta.className = 'meta';
+    const impBadge = document.createElement('span');
+    impBadge.className = `badge importance-${todo.importance}`;
+    impBadge.textContent = todo.importance;
+    meta.appendChild(impBadge);
 
-      // Importance badge
-      const impBadge = document.createElement('span');
-      impBadge.className = `badge importance-${todo.importance}`;
-      impBadge.textContent = todo.importance;
-      meta.appendChild(impBadge);
-
-      // Urgency badge (computed on-the-fly)
+    if (view === 'active') {
       const emBadge = document.createElement('span');
       const taskUrgency = calculateUrgency(todo.deadline, todo.duration);
       emBadge.className = `badge urgency-${taskUrgency}`;
       emBadge.textContent = taskUrgency.charAt(0).toUpperCase() + taskUrgency.slice(1);
       meta.appendChild(emBadge);
+    }
 
-      // Repeatable badge
-      if (todo.repeat) {
-        const repBadge = document.createElement('span');
-        repBadge.className = 'badge repeatable';
-        repBadge.textContent = todo.repeat;
-        meta.appendChild(repBadge);
-      }
+    if (todo.repeat) {
+      const repBadge = document.createElement('span');
+      repBadge.className = 'badge repeatable';
+      repBadge.textContent = todo.repeat;
+      meta.appendChild(repBadge);
+    }
 
-      // Deadline badge
-      if (todo.deadline) {
-        const dlBadge = document.createElement('span');
-        dlBadge.className = 'badge deadline';
-        const remaining = todo.deadline - now;
-        if (remaining <= 0) {
-          dlBadge.textContent = 'Overdue';
-        } else {
-          dlBadge.textContent = formatRemaining(remaining);
+    if (todo.deadline) {
+      const dlBadge = document.createElement('span');
+      dlBadge.className = 'badge deadline';
+      dlBadge.dataset.deadline = todo.deadline;
+      const remaining = todo.deadline - now;
+      dlBadge.textContent = remaining <= 0 ? 'Overdue' : formatRemaining(remaining);
+      meta.appendChild(dlBadge);
+    }
+
+    textArea.append(textEl, meta);
+
+    const timestamps = document.createElement('div');
+    timestamps.className = 'timestamps';
+
+    const createdSpan = document.createElement('span');
+    createdSpan.className = 'timestamp created';
+    createdSpan.textContent = 'created: ' + formatTimestamp(todo.createdAt);
+    timestamps.appendChild(createdSpan);
+
+    if (todo.completedAt) {
+      const completedSpan = document.createElement('span');
+      completedSpan.className = 'timestamp completed';
+      completedSpan.textContent = `completed: ${formatTimestamp(todo.completedAt)}`;
+      timestamps.appendChild(completedSpan);
+    }
+
+    textArea.appendChild(timestamps);
+    li.append(checkbox, textArea);
+  }
+
+  return li;
+}
+
+/**
+ * Checks if a todo matches the current importance + deadline + urgency filters.
+ * Used by targeted DOM helpers to avoid adding items that should be hidden.
+ * @param {Object} todo - The todo to check
+ * @param {boolean} isActive - Whether this is an active task (for urgency filter)
+ * @returns {boolean}
+ */
+function matchesFilters(todo, isActive) {
+  if (importanceFilter !== 'all' && todo.importance !== importanceFilter) return false;
+  if (deadlineFilter !== 'all' && todo.deadline) {
+    if (deadlineFilter === 'overdue' && todo.deadline > Date.now()) return false;
+    if (deadlineFilter === 'today') {
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      if (todo.deadline > todayEnd.getTime()) return false;
+    }
+    if (deadlineFilter === 'week') {
+      const weekEnd = new Date();
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      weekEnd.setHours(23, 59, 59, 999);
+      if (todo.deadline > weekEnd.getTime()) return false;
+    }
+  }
+  if (isActive && urgencyFilter !== 'all') {
+    if (calculateUrgency(todo.deadline, todo.duration) !== urgencyFilter) return false;
+  }
+  return true;
+}
+
+/**
+ * Adds a new todo element to the top of the active list (if it matches current filters).
+ * @param {Object} todo - The todo to add
+ */
+function addTodoToDOM(todo) {
+  if (!matchesFilters(todo, true)) return;
+  const activeList = document.getElementById('active-list');
+  const item = buildItem(todo, 'active');
+  activeList.prepend(item);
+  // Remove empty state if present
+  const emptyMsg = activeList.querySelector('.empty-state');
+  if (emptyMsg) emptyMsg.remove();
+}
+
+/**
+ * Replaces an existing todo element with updated content.
+ * If the updated todo no longer matches filters, removes it instead.
+ * @param {Object} todo - The updated todo
+ */
+function updateTodoInDOM(todo) {
+  const el = document.querySelector(`li[data-id="${todo.id}"]`);
+  if (!el) return;
+  const view = el.classList.contains('completed') ? 'completed' : 'active';
+  if (!matchesFilters(todo, view === 'active')) {
+    el.remove();
+    return;
+  }
+  const newEl = buildItem(todo, view);
+  el.replaceWith(newEl);
+}
+
+/**
+ * Removes a todo element from its list.
+ * @param {number} id - Todo ID
+ */
+function removeTodoFromDOM(id) {
+  const el = document.querySelector(`li[data-id="${id}"]`);
+  if (el) el.remove();
+}
+
+/**
+ * Adds a deleted todo element to the trash list.
+ * CSS handles hiding the deleted section when not in trash view.
+ * @param {Object} todo - The deleted todo
+ */
+function addTrashTodoToDOM(todo) {
+  const deletedList = document.getElementById('deleted-list');
+  deletedList.appendChild(buildItem(todo, 'deleted'));
+}
+
+/**
+ * Moves a todo from deleted list to active list in the DOM.
+ * If the restored todo doesn't match current filters, only removes from deleted.
+ * @param {Object} todo - The restored todo
+ */
+function restoreTodoToDOM(todo) {
+  removeTodoFromDOM(todo.id);
+  if (!matchesFilters(todo, true)) return;
+  const activeList = document.getElementById('active-list');
+  activeList.prepend(buildItem(todo, 'active'));
+}
+
+/**
+ * Populates the three section lists with filtered items.
+ * Full DOM rebuild — called on filter changes and initial load.
+ * Individual CRUD operations use targeted DOM helpers instead.
+ */
+function render() {
+  const activeList = document.getElementById('active-list');
+  const completedList = document.getElementById('completed-list');
+  const deletedList = document.getElementById('deleted-list');
+
+  activeList.innerHTML = '';
+  completedList.innerHTML = '';
+  deletedList.innerHTML = '';
+
+  // Map status filter values to CSS classes
+  const classMap = { all: '', active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
+  todoList.className = classMap[statusFilter] || '';
+
+  const now = Date.now();
+
+  // Helper: apply importance + deadline filters to an array
+  function applyFilters(items, isActive) {
+    return items.filter(todo => {
+      if (importanceFilter !== 'all' && todo.importance !== importanceFilter) return false;
+      if (deadlineFilter !== 'all' && todo.deadline) {
+        if (deadlineFilter === 'overdue' && todo.deadline > now) return false;
+        if (deadlineFilter === 'today') {
+          const todayEnd = new Date();
+          todayEnd.setHours(23, 59, 59, 999);
+          if (todo.deadline > todayEnd.getTime()) return false;
         }
-        meta.appendChild(dlBadge);
+        if (deadlineFilter === 'week') {
+          const weekEnd = new Date();
+          weekEnd.setDate(weekEnd.getDate() + 7);
+          weekEnd.setHours(23, 59, 59, 999);
+          if (todo.deadline > weekEnd.getTime()) return false;
+        }
       }
-
-      textArea.append(textEl, meta);
-
-      // Timestamps
-      const timestamps = document.createElement('div');
-      timestamps.className = 'timestamps';
-
-      const createdSpan = document.createElement('span');
-      createdSpan.className = 'timestamp created';
-      createdSpan.textContent = 'created: ' + formatTimestamp(todo.createdAt);
-      timestamps.appendChild(createdSpan);
-
-      if (todo.completedAt) {
-        const completedSpan = document.createElement('span');
-        completedSpan.className = 'timestamp completed';
-        completedSpan.textContent = 'completed: ' + formatTimestamp(todo.completedAt);
-        timestamps.appendChild(completedSpan);
+      if (isActive && urgencyFilter !== 'all') {
+        if (calculateUrgency(todo.deadline, todo.duration) !== urgencyFilter) return false;
       }
-
-      textArea.appendChild(timestamps);
-
-      // Click task to edit
-      textArea.addEventListener('click', (e) => {
-        if (e.target === checkbox || checkbox.contains(e.target)) return;
-        openEditDialog(todo);
-      });
-
-      // Delete button
-      // const deleteBtn = document.createElement('button');
-      // deleteBtn.className = 'delete-btn';
-      // deleteBtn.innerHTML = '&times;';
-      // deleteBtn.title = 'Delete';
-      // deleteBtn.addEventListener('click', () => deleteTodo(todo.id));
-
-      li.append(checkbox, textArea);
-
-      todoList.appendChild(li);
+      return true;
     });
   }
 
-  const activeCount = todos.filter(t => !t.completed).length;
-  footer.style.display = todos.length ? 'flex' : 'none';
-  countEl.textContent = `${activeCount} item${activeCount !== 1 ? 's' : ''} left`;
+  const activeItems = applyFilters(active, true);
+  const completedItems = applyFilters(completed, false);
+  const deletedItems = applyFilters(deleted, false);
 
+  activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
+  completedItems.forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
+  deletedItems.forEach(todo => deletedList.appendChild(buildItem(todo, 'deleted')));
+
+  // Show empty state only when "all" view and everything is empty
+  if (statusFilter === 'all' && activeItems.length === 0 && completedItems.length === 0 && deletedItems.length === 0) {
+    const emptyMsg = document.createElement('li');
+    emptyMsg.className = 'empty-state';
+    emptyMsg.textContent = 'No tasks yet. Add one!';
+    activeList.appendChild(emptyMsg);
+  }
+
+  updateFooter();
+  updateFilterButtons();
+}
+
+/**
+ * Updates the footer visibility and count based on current view.
+ */
+function updateFooter() {
+  const hasItems = active.length || completed.length || deleted.length;
+  footer.style.display = hasItems ? 'flex' : 'none';
+
+  if (!hasItems) return;
+
+  if (statusFilter === 'trash') {
+    countEl.textContent = `${deleted.length} in trash`;
+  } else if (statusFilter === 'completed') {
+    countEl.textContent = `${completed.length} completed`;
+  } else if (statusFilter === 'all') {
+    countEl.textContent = `${active.length + completed.length} total (${active.length} active)`;
+  } else {
+    countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''} left`;
+  }
+}
+
+/**
+ * Moves a DOM element from active list to completed list (prepended).
+ * Strips urgency badge (completed tasks don't show urgency).
+ */
+function moveToCompleted(id) {
+  const el = document.querySelector(`#active-list li[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.add('completed');
+  el.querySelectorAll('.badge.urgency-lax, .badge.urgency-balanced, .badge.urgency-stressy')
+    .forEach(badge => badge.remove());
+
+  const completedList = document.getElementById('completed-list');
+  completedList.prepend(el);
+  updateFooter();
+}
+
+/**
+ * Moves a DOM element from completed list to active list (prepended).
+ * Adds urgency badge back for active tasks.
+ */
+function moveToActive(id) {
+  const el = document.querySelector(`#completed-list li[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.remove('completed');
+  // Add urgency badge if task has a deadline
+  const meta = el.querySelector('.meta');
+  if (meta && el.querySelector('.badge.urgency') === null) {
+    const now = Date.now();
+    const deadline = Number(el.querySelector('.badge.deadline')?.dataset.deadline);
+    if (deadline) {
+      const urgency = calculateUrgency(deadline, null);
+      const emBadge = document.createElement('span');
+      emBadge.className = `badge urgency-${urgency}`;
+      emBadge.textContent = urgency.charAt(0).toUpperCase() + urgency.slice(1);
+      // Insert after importance badge
+      // HACK FIX
+      const impBadge = meta.querySelector('.badge.importance-low')
+        || meta.querySelector('.badge.importance-medium')
+        || meta.querySelector('.badge.importance-high');
+      if(impBadge)
+        impBadge.after(emBadge);
+    }
+  }
+  const activeList = document.getElementById('active-list');
+  activeList.prepend(el);
+  updateFooter();
+}
+
+/**
+ * Lightweight timer update: only refreshes urgency badges and deadline countdowns.
+ * Called by the interval so the DOM isn't rebuilt every minute.
+ */
+function updateTimers() {
+  const now = Date.now();
+
+  // Build ID→todo lookup from all three arrays
+  const todoMap = new Map();
+  active.forEach(todo => todoMap.set(todo.id, todo));
+  completed.forEach(todo => todoMap.set(todo.id, todo));
+  deleted.forEach(todo => todoMap.set(todo.id, todo));
+
+  const items = todoList.querySelectorAll('.todo-item');
+
+  items.forEach(li => {
+    const todo = todoMap.get(Number(li.dataset.id));
+    if (!todo) return;
+
+    const meta = li.querySelector('.meta');
+    if (!meta) return;
+
+    // Update urgency badge (only for active tasks)
+    const emBadge = meta.querySelector('.badge.urgency');
+    if (emBadge && todo.completed === 0) {
+      const urgency = calculateUrgency(todo.deadline, todo.duration);
+      emBadge.className = `badge urgency-${urgency}`;
+      emBadge.textContent = urgency.charAt(0).toUpperCase() + urgency.slice(1);
+    }
+
+    // Update deadline badge / countdown
+    const dlBadge = meta.querySelector('.badge.deadline');
+    if (dlBadge) {
+      const remaining = (dlBadge.dataset.deadline ? Number(dlBadge.dataset.deadline) : 0) - now;
+      if (remaining <= 0) {
+        dlBadge.textContent = 'Overdue';
+      } else {
+        dlBadge.textContent = formatRemaining(remaining);
+      }
+    }
+  });
+
+  updateFooter();
   updateFilterButtons();
 }
 
@@ -454,38 +864,35 @@ function render() {
  * @returns {void}
  */
 function updateFilterButtons() {
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+  const btns = document.querySelectorAll('.filter-btn');
+  btns.forEach(btn => {
     const filter = btn.dataset.filter;
     const ifilter = btn.dataset.ifilter;
     const dfilter = btn.dataset.dfilter;
     const ufilter = btn.dataset.ufilter;
 
-    if (filter !== undefined) {
-      btn.classList.toggle('active', filter === statusFilter);
-    }
-    if (ifilter !== undefined) {
-      btn.classList.toggle('active', ifilter === importanceFilter);
-    }
-    if (dfilter !== undefined) {
-      btn.classList.toggle('active', dfilter === deadlineFilter);
-    }
-    if (ufilter !== undefined) {
-      btn.classList.toggle('active', ufilter === urgencyFilter);
-    }
+    if (filter !== undefined) btn.classList.toggle('active', filter === statusFilter);
+    if (ifilter !== undefined) btn.classList.toggle('active', ifilter === importanceFilter);
+    if (dfilter !== undefined) btn.classList.toggle('active', dfilter === deadlineFilter);
+    if (ufilter !== undefined) btn.classList.toggle('active', ufilter === urgencyFilter);
   });
+}
+
+// ── Dialog Reset ───────────────────────────────────────────────
+
+/** Resets the dialog to its default "add" state. */
+function resetDialog() {
+  editingTodoId = null;
+  document.querySelector('.dialog-title').textContent = 'New Task';
+  document.querySelector('.dialog-submit').textContent = 'Add';
+  dialogDelete.style.display = 'none';
+  todoForm.reset();
+  deadlineInput.value = '';
+  durationSelect.value = '5';
 }
 
 // ── Actions ────────────────────────────────────────────────────
 
-/**
- * Creates a new todo, saves it to IndexedDB, and re-renders.
- * @param {string} text
- * @param {string} repeat
- * @param {'high' | 'medium' | 'low'} importance
- * @param {string | null} deadlineStr - datetime-local string (e.g. '2026-08-02T15:30')
- * @param {string} duration
- * @returns {Promise<void>}
- */
 /**
  * Opens the dialog in edit mode, pre-filling fields with the task's values.
  * @param {Todo} todo - The task to edit.
@@ -507,29 +914,55 @@ function openEditDialog(todo) {
   todoInput.focus();
 }
 
+/**
+ * Converts a millisecond timestamp to datetime-local string.
+ * @param {number} timestamp
+ * @returns {string}
+ */
+function msToDatetimeLocal(timestamp) {
+  const d = new Date(timestamp);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${mo}-${da}T${h}:${mi}`;
+}
+
+/**
+ * Adds a new todo, saves it to IndexedDB, and re-renders.
+ * @param {string} text
+ * @param {string} repeat
+ * @param {'high' | 'medium' | 'low'} importance
+ * @param {string | null} deadlineStr - datetime-local string
+ * @param {string} duration
+ * @returns {Promise<void>}
+ */
 async function addTodo(text, repeat, importance, deadlineStr, duration) {
   const now = Date.now();
-  // Convert datetime-local string to timestamp (handle timezone correctly)
   const deadlineMs = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   const todo = {
-    id: now,
     text,
-    completed: false,
     createdAt: now,
-    completedAt: null,
     repeat,
     importance,
     deadline: deadlineMs,
     duration,
-    nextRepeatDate: null
+    completed: 0,
+    completedAt: null,
+    deleted: 0,
+    deletedAt: null
   };
-  todos.unshift(todo);
-  await dbPut(todo);
-  render();
+  const id = await dbAdd(todo);
+  todo.id = id;
+  active.unshift(todo);
+  addTodoToDOM(todo);
+  updateFooter();
+  updateFilterButtons();
 }
 
 /**
- * Updates an existing task with new values, persists to IndexedDB, and re-renders.
+ * Updates an existing task with new values, persists to IndexedDB, and updates the DOM element in place.
  * @param {number} id - Todo ID to update.
  * @param {string} text - New task description.
  * @param {string} repeat - New repeat schedule.
@@ -539,7 +972,8 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
  * @returns {Promise<void>}
  */
 async function updateTodo(id, text, repeat, importance, deadlineStr, duration) {
-  const todo = todos.find(t => t.id === id);
+  // Search in active first, then completed
+  const todo = active.find(t => t.id === id) || completed.find(t => t.id === id);
   if (!todo) return;
 
   todo.text = text;
@@ -549,46 +983,121 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration) {
   todo.deadline = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
 
   await dbPut(todo);
-  render();
+  updateTodoInDOM(todo);
+  updateFooter();
+  updateFilterButtons();
 }
 
 /**
- * Toggles a todo's completion status, updates IndexedDB, and re-renders.
+ * Toggles a todo's completion status. Sets completed flag and completedAt timestamp.
  * @param {number} id - Todo ID
  * @returns {Promise<void>}
  */
 async function toggleTodo(id) {
-  const todo = todos.find(t => t.id === id);
-  if (todo) {
-    todo.completed = !todo.completed;
-    todo.completedAt = todo.completed ? Date.now() : null;
+  // Search in active first, then completed
+  const todo = active.find(t => t.id === id) || completed.find(t => t.id === id);
+  if (!todo) return;
 
-    // If re-opening a repeatable, set the next uncompletion time
-    if (!todo.completed && todo.repeat) {
+  if (todo.completed === 0) {
+    // Complete: active → completed
+    todo.completed = 1;
+    todo.completedAt = Date.now();
+    if (todo.repeat) {
       const periodMs = getRepeatMs(todo.repeat);
       todo.nextRepeatDate = Date.now() + periodMs;
     }
-
-    await dbPut(todo);
-    render();
+    const idx = active.indexOf(todo);
+    if (idx > -1) active.splice(idx, 1);
+    completed.push(todo);
+    moveToCompleted(id);
+  } else {
+    // Decomplete: completed → active
+    todo.completed = 0;
+    todo.completedAt = null;
+    delete todo.nextRepeatDate;
+    const idx = completed.indexOf(todo);
+    if (idx > -1) completed.splice(idx, 1);
+    active.push(todo);
+    moveToActive(id);
   }
+
+  await dbPut(todo);
+  updateFilterButtons();
 }
 
 /**
- * Deletes a todo after user confirmation.
- * @param {number} id - Todo ID
+ * Deletes a todo after user confirmation. Sets deleted flag and deletedAt timestamp.
+ * @param {number} id - Todo ID to delete.
  * @returns {Promise<void>}
  */
 async function deleteTodo(id) {
   if (!confirm('Are you sure you want to delete this task?')) return;
-  todos = todos.filter(t => t.id !== id);
+
+  // Search in active first, then completed
+  const activeIdx = active.findIndex(t => t.id === id);
+  const completedIdx = completed.findIndex(t => t.id === id);
+  const todo = activeIdx !== -1 ? active[activeIdx] : completedIdx !== -1 ? completed[completedIdx] : null;
+  if (!todo) return;
+
+  todo.deleted = 1;
+  todo.deletedAt = Date.now();
+
+  if (activeIdx !== -1) {
+    active.splice(activeIdx, 1);
+  } else {
+    completed.splice(completedIdx, 1);
+  }
+  deleted.push(todo);
+
+  await dbPut(todo);
+  removeTodoFromDOM(id);
+  addTrashTodoToDOM(todo);
+  updateFooter();
+  updateFilterButtons();
+}
+
+/**
+ * Restores a deleted todo back to active status.
+ * @param {number} id - Todo ID to restore.
+ * @returns {Promise<void>}
+ */
+async function restoreTrash(id) {
+  const idx = deleted.findIndex(t => t.id === id);
+  const todo = idx !== -1 ? deleted[idx] : null;
+  if (!todo) return;
+
+  todo.deleted = 0;
+  todo.deletedAt = null;
+
+  deleted.splice(idx, 1);
+  active.push(todo);
+
+  await dbPut(todo);
+  restoreTodoToDOM(todo);
+  updateFooter();
+  updateFilterButtons();
+}
+
+/**
+ * Permanently deletes a todo from the store.
+ * @param {number} id - Todo ID to permanently delete.
+ * @returns {Promise<void>}
+ */
+async function permanentDeleteTrash(id) {
+  if (!confirm('Permanently delete this task? This cannot be undone.')) return;
+
+  const idx = deleted.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  deleted.splice(idx, 1);
   await dbDelete(id);
-  render();
+  removeTodoFromDOM(id);
+  updateFooter();
+  updateFilterButtons();
 }
 
 // ── Filter state ───────────────────────────────────────────────
 
-/** @type {'all' | 'active' | 'completed'} */
+/** @type {'all' | 'active' | 'completed' | 'trash'} */
 let statusFilter = 'all';
 
 /** @type {'all' | 'high' | 'medium' | 'low'} */
@@ -618,83 +1127,68 @@ dialogCancel.addEventListener('click', () => {
 dialogDelete.addEventListener('click', () => {
   if (editingTodoId !== null) {
     deleteTodo(editingTodoId);
-    resetDialog();
-    dialog.close();
   }
+  resetDialog();
+  dialog.close();
 });
 
 // Handle form submission
-todoForm.addEventListener('submit', e => {
+todoForm.addEventListener('submit', async e => {
   e.preventDefault();
   const text = todoInput.value.trim();
   if (!text) return;
 
-  if (editingTodoId !== null) {
-    // Edit mode
-    updateTodo(
-      editingTodoId,
-      text,
-      repeatSelect.value,
-      importanceSelect.value,
-      deadlineInput.value,
-      durationSelect.value
-    );
-    resetDialog();
-    dialog.close();
-  } else {
-    // Add mode
-    addTodo(
-      text,
-      repeatSelect.value,
-      importanceSelect.value,
-      deadlineInput.value,
-      durationSelect.value
-    );
-    todoInput.value = '';
-    dialog.close();
+  const submitBtn = document.querySelector('.dialog-submit');
+  submitBtn.disabled = true;
+
+  try {
+    if (editingTodoId !== null) {
+      await updateTodo(
+        editingTodoId,
+        text,
+        repeatSelect.value,
+        importanceSelect.value,
+        deadlineInput.value,
+        durationSelect.value
+      );
+      resetDialog();
+      dialog.close();
+    } else {
+      await addTodo(
+        text,
+        repeatSelect.value,
+        importanceSelect.value,
+        deadlineInput.value,
+        durationSelect.value
+      );
+      todoInput.value = '';
+      dialog.close();
+    }
+  } finally {
+    submitBtn.disabled = false;
   }
 });
 
-/**
- * Resets the dialog to its default "add" state.
- */
-function resetDialog() {
-  editingTodoId = null;
-  document.querySelector('.dialog-title').textContent = 'New Task';
-  document.querySelector('.dialog-submit').textContent = 'Add';
-  dialogDelete.style.display = 'none';
-  todoForm.reset();
-}
-
-// Status filters
-document.querySelectorAll('[data-filter]').forEach(btn => {
+// Filter buttons: status filter toggles section visibility
+const filterBtns = document.querySelectorAll('.filter-btn');
+filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    statusFilter = btn.dataset.filter;
-    render();
-  });
-});
-
-// Importance filters
-document.querySelectorAll('[data-ifilter]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    importanceFilter = btn.dataset.ifilter;
-    render();
-  });
-});
-
-// Deadline filters
-document.querySelectorAll('[data-dfilter]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    deadlineFilter = btn.dataset.dfilter;
-    render();
-  });
-});
-
-// Urgency filters
-document.querySelectorAll('[data-ufilter]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    urgencyFilter = btn.dataset.ufilter;
-    render();
+    if (btn.dataset.filter !== undefined) {
+      statusFilter = btn.dataset.filter;
+      // Toggle section visibility via CSS class on todoList
+      // Map status filter values to CSS classes
+      const classMap = { all: '', active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
+      todoList.className = classMap[statusFilter] || '';
+      updateFooter();
+      updateFilterButtons();
+    }
+    if (btn.dataset.ifilter !== undefined) importanceFilter = btn.dataset.ifilter;
+    if (btn.dataset.dfilter !== undefined) deadlineFilter = btn.dataset.dfilter;
+    if (btn.dataset.ufilter !== undefined) urgencyFilter = btn.dataset.ufilter;
+    // Only full re-render for non-status filters
+    if (btn.dataset.ifilter !== undefined || btn.dataset.dfilter !== undefined || btn.dataset.ufilter !== undefined) {
+      render();
+    }
   });
 });
 
@@ -704,6 +1198,30 @@ filterToggle.addEventListener('click', () => {
   filterToggle.classList.toggle('active', isExpanded);
 });
 
+// Event delegation for todo list items (works with section-based DOM)
+todoList.addEventListener('click', (e) => {
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl) return;
+  const action = actionEl.dataset.action;
+  const id = Number(actionEl.dataset.id);
+
+  switch (action) {
+    case 'toggle':
+      toggleTodo(id);
+      break;
+    case 'edit':
+      const editTodo = active.find(t => t.id === id) || completed.find(t => t.id === id);
+      if (editTodo) openEditDialog(editTodo);
+      break;
+    case 'restore':
+      restoreTrash(id);
+      break;
+    case 'perm-delete':
+      permanentDeleteTrash(id);
+      break;
+  }
+});
+
 // ── Service Worker Registration ────────────────────────────────
 
 if ('serviceWorker' in navigator) {
@@ -711,20 +1229,6 @@ if ('serviceWorker' in navigator) {
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
       console.log('Service Worker registered:', registration.scope);
-
-      // Notify the SW to start the background repeat checker
-      if (registration.active) {
-        registration.active.postMessage({ type: 'INIT_REPEAT_CHECKER' });
-      }
-
-      // Listen for SW messages (repeat check results, push sync)
-      navigator.serviceWorker.addEventListener('message', event => {
-        if (event.data && event.data.type === 'PUSH_REPEAT_CHECK') {
-          loadTodos().then(() => {
-            checkTasks();
-          });
-        }
-      });
 
       // Ask for notification permission
       if ('Notification' in window && Notification.permission === 'default') {
@@ -745,10 +1249,18 @@ if ('serviceWorker' in navigator) {
  */
 async function init() {
   await openDB();
-  await loadTodos();
+  active = await dbGetActive();
+  completed = await dbGetCompleted();
+  deleted = await dbGetDeleted();
+  const all = [...active, ...completed, ...deleted];
+  all.forEach(todo => {
+    lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
+  });
   checkTasks();
-  setInterval(checkTasks, 5 * 60 * 1000);
-  setInterval(render, 60 * 1000); // Update deadline badges & urgency every minute
+  setInterval(() => {
+    checkTasks();
+    updateTimers();
+  }, 5 * 60 * 1000); // Update repeat tasks & timers every 5 minutes
   render();
 }
 

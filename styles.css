@@ -344,7 +344,6 @@ body {
 /* ── Task List ──────────────────────────────────────────────── */
 
 #todo-list {
-  list-style: none;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
@@ -450,6 +449,46 @@ body {
   color: #2ecc71;
 }
 
+.todo-item .timestamp.deleted {
+  color: #e74c3c;
+}
+
+/* ── Trash Actions ──────────────────────────────────────────── */
+
+.trash-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.trash-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.restore-btn {
+  background: #2ecc71;
+  color: #fff;
+}
+
+.restore-btn:hover {
+  background: #27ae60;
+}
+
+.perm-delete-btn {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.perm-delete-btn:hover {
+  background: #c0392b;
+}
+
 .todo-item .delete-btn {
   background: none;
   border: none;
@@ -484,4 +523,55 @@ body {
   border-top: 2px solid #eee;
   font-size: 0.9rem;
   color: #888;
+}
+
+/* ── Section-based layout ───────────────────────────────────── */
+
+.section {
+  margin-bottom: 16px;
+}
+
+.section h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #999;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #eee;
+}
+
+.section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.section ul li {
+  padding: 8px 0;
+}
+
+/* Section visibility controlled by view class on #todo-list */
+/* Deleted section hidden by default — only shown in trash view */
+.section-deleted {
+  display: none;
+}
+
+.view-active .section-completed,
+.view-active .section-deleted {
+  display: none;
+}
+
+.view-completed .section-active,
+.view-completed .section-deleted {
+  display: none;
+}
+
+.view-deleted .section-active,
+.view-deleted .section-completed {
+  display: none;
+}
+
+.view-deleted .section-deleted {
+  display: block;
 }

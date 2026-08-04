@@ -1,5 +1,5 @@
 /** @type {string} */
-const CACHE_NAME = 'todo-app-v2';
+const CACHE_NAME = 'todo-app-v3';
 
 /** @type {string[]} */
 const STATIC_RESOURCES = [
@@ -16,8 +16,16 @@ const STATIC_RESOURCES = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_RESOURCES))
+    caches.open(CACHE_NAME).then(cache =>
+      // Per-resource caching: partial success is ok, one failure won't abort the whole install
+      Promise.all(
+        STATIC_RESOURCES.map(resource =>
+          cache.add(resource).catch(() => {
+            console.warn('[SW] Failed to cache:', resource);
+          })
+        )
+      )
+    )
   );
   self.skipWaiting();
 });
@@ -36,134 +44,29 @@ self.addEventListener('activate', event => {
 // ── Fetch ─────────────────────────────────────────────────────
 
 self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // HTML/navigation requests: network-first (get fresh content)
+  if (request.mode === 'navigate' || (url.pathname.endsWith('.html'))) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Clone the response to cache it for future requests
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match('./index.html')) // offline fallback
+    );
+    return;
+  }
+
+  // Static assets: cache-first (fast, works offline)
   event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
-  );
-});
-
-// ── Background Repeat Checker ─────────────────────────────────
-
-/** @type {number} */
-const REPEAT_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'INIT_REPEAT_CHECKER') {
-    startRepeatChecker();
-  }
-});
-
-/**
- * Starts the background repeat checker: runs once immediately,
- * then every 5 minutes via setInterval.
- * @returns {void}
- */
-function startRepeatChecker() {
-  checkTasks();
-  setInterval(() => {
-    checkTasks();
-  }, REPEAT_CHECK_INTERVAL);
-}
-
-/**
- * Converts a repeat schedule string to milliseconds.
- * @param {string} repeat
- * @returns {number | null}
- */
-function getRepeatMs(repeat) {
-  switch (repeat) {
-    case 'daily':   return 24 * 60 * 60 * 1000;
-    case 'weekly':  return 7 * 24 * 60 * 60 * 1000;
-    case 'monthly': return 30 * 24 * 60 * 60 * 1000;
-    case '30s':     return 30 * 1000;
-    default:        return null;
-  }
-}
-
-/**
- * Background task checker running in the service worker.
- * Reads todos from IndexedDB, re-emerges applicable repeatable tasks,
- * writes updates back, notifies the page via postMessage,
- * and sends a push notification if permission is granted.
- * @returns {void}
- */
-function checkTasks() {
-  // Read todos from IndexedDB directly in the service worker
-  const DB_NAME = 'TodoAppDB';
-  const STORE_NAME = 'todos';
-
-  self.clients.matchAll({ type: 'window' }).then(clients => {
-    if (clients.length === 0) return;
-
-    // Open IndexedDB in the SW context and check todos
-    const request = indexedDB.open(DB_NAME);
-    request.onsuccess = event => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) return;
-
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const getAllRequest = store.getAll();
-
-      getAllRequest.onsuccess = () => {
-        const storedTodos = getAllRequest.result || [];
-        const now = Date.now();
-        let changed = false;
-        let reemergedTodo = null;
-
-        storedTodos.forEach(todo => {
-          if (!todo.repeat || !todo.completed) return;
-          if (now >= todo.nextRepeatDate) {
-            // Re-emerge the task
-            todo.completed = false;
-            todo.completedAt = null;
-            todo.nextRepeatDate = now + getRepeatMs(todo.repeat);
-            changed = true;
-            reemergedTodo = todo;
-          }
-        });
-
-        if (changed) {
-          // Write updated todos back to IndexedDB
-          const writeTx = db.transaction(STORE_NAME, 'readwrite');
-          const writeStore = writeTx.objectStore(STORE_NAME);
-          storedTodos.forEach(todo => writeStore.put(todo));
-
-          // Notify the page that tasks have been updated
-          clients[0].postMessage({ type: 'PUSH_REPEAT_CHECK' });
-
-          // Send a push notification if the page is not focused
-          if (Notification.permission === 'granted') {
-            self.registration.showNotification('Task Re-emerged! ✨', {
-              body: `"${reemergedTodo.text}" is back on your list.`,
-              icon: '/icon-192x192.png',
-              badge: '/icon-192x192.png',
-              tag: 'repeat-task'
-            });
-          }
-        }
-      };
-
-      request.onerror = () => console.error('❌ IndexedDB read failed in SW');
-    };
-
-    request.onerror = () => console.error('❌ IndexedDB open failed in SW');
-  });
-}
-
-// ── Push Notification Handler (for when the app is closed) ───
-
-self.addEventListener('push', event => {
-  const data = event.data ? event.data.json() : {};
-  const title = data.title || 'Task Re-emerged!';
-  const body = data.body || 'A repeatable task has become active again.';
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: body,
-      icon: './icon-192x192.png',
-      badge: './icon-192x192.png',
-      tag: 'repeat-task'
+    caches.match(request).then(response => {
+      if (response) return response;
+      return fetch(request).catch(() => caches.match('./index.html'));
     })
   );
 });
@@ -181,7 +84,7 @@ self.addEventListener('notificationclick', event => {
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow('/');
+        return clients.openWindow('./');
       }
     })
   );
