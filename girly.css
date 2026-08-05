@@ -258,6 +258,40 @@ body::before {
   border-color: #ff4d8a;
 }
 
+/* Theme buttons - girly pink version */
+.theme-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.theme-btn {
+  flex: 1;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 2px solid #ffb6c1;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff5f9, #ffe4e9);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #d63384;
+}
+
+.theme-btn:hover {
+  border-color: #d63384;
+  color: #d63384;
+  background: linear-gradient(145deg, #ffe4e9, #ffd6e0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(214, 51, 132, 0.15);
+}
+
+.theme-btn.active {
+  border-color: #d63384;
+  background: linear-gradient(145deg, #d63384, #ff69b4);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(214, 51, 132, 0.25);
+}
+
 /* Toggle switch - cute pink version */
 .toggle {
   position: relative;

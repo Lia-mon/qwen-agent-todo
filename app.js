@@ -1429,6 +1429,28 @@ async function init() {
   document.getElementById('clear-data')?.addEventListener('click', clearAllData);
   document.getElementById('notif-toggle')?.addEventListener('change', toggleNotifications);
   document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
+
+  // Theme buttons
+  const savedTheme = localStorage.getItem('theme') || 'classic';
+  applyTheme(savedTheme);
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyTheme(btn.dataset.theme);
+    });
+  });
+}
+
+/**
+ * Applies a theme by swapping the main stylesheet.
+ * @param {string} theme - 'classic' or 'girly'
+ */
+function applyTheme(theme) {
+  localStorage.setItem('theme', theme);
+  const link = document.querySelector('link[rel="stylesheet"]');
+  if (link) link.href = theme === 'girly' ? 'girly.css' : 'styles.css';
+  const isGirly = theme === 'girly';
+  document.querySelector('meta[name="theme-color"]').content = isGirly ? '#ff69b4' : '#3498db';
+  document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
 }
 
 init();

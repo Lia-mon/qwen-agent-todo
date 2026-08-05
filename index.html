@@ -97,7 +97,14 @@
             <button id="clear-data" class="settings-action-btn danger">Clear</button>
             </div>
         </div>
-        <div id="settings-personalization" class="settings-tab-content">
+        <div id="settings-personalization" class="settings-tab-content active">
+            <div class="setting-row">
+            <span>Theme</span>
+            <div class="theme-buttons">
+                <button class="theme-btn active" data-theme="classic">Classic</button>
+                <button class="theme-btn" data-theme="girly">Girly</button>
+            </div>
+            </div>
             <div class="setting-row">
             <span>Reduce Motion</span>
             <label class="toggle">
@@ -163,62 +170,6 @@
         </div>
         </form>
     </dialog>
-
-    <div id="settings-panel" class="settings-panel hidden">
-        <div class="settings-header">
-        <h3 class="dialog-title">Settings</h3>
-        <button id="settings-close" class="settings-close" title="Close">✕</button>
-        </div>
-        <nav class="settings-tabs">
-        <button class="settings-tab active" data-tab="notifications">Notifications</button>
-        <button class="settings-tab" data-tab="data">Data Management</button>
-        <button class="settings-tab" data-tab="personalization">Personalization</button>
-        <button class="settings-tab" data-tab="trash">Trash</button>
-        </nav>
-        <div class="settings-content">
-        <div id="settings-notifications" class="settings-tab-content active">
-            <div class="setting-row">
-            <span>Enable Notifications</span>
-            <label class="toggle">
-                <input type="checkbox" id="notif-toggle">
-                <span class="toggle-slider"></span>
-            </label>
-            </div>
-            <p class="setting-hint">Notifications alert you when tasks are overdue or urgency changes.</p>
-        </div>
-        <div id="settings-data" class="settings-tab-content">
-            <div class="setting-row">
-            <span>Export Data</span>
-            <button id="export-data" class="settings-action-btn">Export JSON</button>
-            </div>
-            <div class="setting-row">
-            <span>Import Data</span>
-            <input type="file" id="import-data" accept=".json" style="display:none">
-            <button id="import-data-btn" class="settings-action-btn">Import JSON</button>
-            </div>
-            <div class="setting-row">
-            <span>Clear All Data</span>
-            <button id="clear-data" class="settings-action-btn danger">Clear</button>
-            </div>
-        </div>
-        <div id="settings-personalization" class="settings-tab-content">
-            <div class="setting-row">
-            <span>Reduce Motion</span>
-            <label class="toggle">
-                <input type="checkbox" id="motion-toggle">
-                <span class="toggle-slider"></span>
-            </label>
-            </div>
-            <p class="setting-hint">Minimizes animations and transitions for reduced motion preference.</p>
-        </div>
-        <div id="settings-trash" class="settings-tab-content">
-            <ul id="settings-deleted-list"></ul>
-        </div>
-        </div>
-        <footer id="settings-footer" class="settings-footer">
-        <div id="settings-pagination" class="pagination"></div>
-        </footer>
-    </div>
 
     <script src="app.js"></script>
 </body>
