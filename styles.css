@@ -1,4 +1,38 @@
 /* ═══════════════════════════════════════════
+   iOS / Safari Fixes
+   ═══════════════════════════════════════════ */
+
+html {
+  height: -webkit-fill-available;
+}
+
+body {
+  min-height: -webkit-fill-available;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for iOS 100vh address bar issue */
+@supports (-webkit-touch-callout: none) {
+  .panel,
+  #settings-dialog {
+    height: 100dvh;
+  }
+}
+
+/* Fix form inputs on iOS */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* Smooth scrolling for iOS */
+.settings-content,
+#todo-list {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ═══════════════════════════════════════════
    DESIGN TOKENS (Classic Theme)
    ═══════════════════════════════════════════ */
 
