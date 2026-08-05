@@ -673,8 +673,9 @@ function render() {
   completedItems.forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
   deletedItems.forEach(todo => deletedList.appendChild(buildItem(todo, 'deleted')));
 
-  // Show empty state only when "all" view and everything is empty
-  if (statusFilter === 'all' && activeItems.length === 0 && completedItems.length === 0 && deletedItems.length === 0) {
+  // Show empty state when the current view has no items
+  const hasItems = activeItems.length || completedItems.length || deletedItems.length;
+  if (!hasItems) {
     const emptyMsg = document.createElement('li');
     emptyMsg.className = 'empty-state';
     emptyMsg.textContent = 'No tasks yet. Add one!';
@@ -698,8 +699,6 @@ function updateFooter() {
     countEl.textContent = `${deleted.length} in trash`;
   } else if (statusFilter === 'completed') {
     countEl.textContent = `${completed.length} completed`;
-  } else if (statusFilter === 'all') {
-    countEl.textContent = `${active.length + completed.length} total (${active.length} active)`;
   } else {
     countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''} left`;
   }
@@ -995,11 +994,11 @@ async function permanentDeleteTrash(id) {
 
 // ── Filter state ───────────────────────────────────────────────
 
-/** @type {'all' | 'active' | 'completed' | 'trash'} */
-let statusFilter = 'all';
+/** @type {'active' | 'completed' | 'trash'} */
+let statusFilter = 'active';
 
 /** Maps status filter values to CSS view classes. */
-const VIEW_CLASS_MAP = { all: '', active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
+const VIEW_CLASS_MAP = { active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
 
 /** @type {'all' | 'high' | 'medium' | 'low'} */
 let importanceFilter = 'all';

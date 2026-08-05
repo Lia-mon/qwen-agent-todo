@@ -12,8 +12,7 @@
     <!-- ── Task Rendering Panel ───────────────────────────────── -->
     <section class="panel">
         <div class="filter-bar">
-            <button class="status-btn active" data-filter="all">All</button>
-            <button class="status-btn" data-filter="active">Active</button>
+            <button class="status-btn active" data-filter="active">Active</button>
             <button class="status-btn" data-filter="completed">Completed</button>
             <button class="status-btn" data-filter="trash">Trash</button>
             <button id="filter-toggle" class="filter-toggle" title="Filters">⚙</button>
@@ -43,7 +42,7 @@
             <button class="filter-btn urgency-filter" data-ufilter="lax">Lax</button>
             </div>
         </div>
-        <div id="todo-list" class="todo-list">
+        <div id="todo-list" class="todo-list view-active">
           <div id="active-section" class="section section-active">
             <ul id="active-list"></ul>
           </div>
