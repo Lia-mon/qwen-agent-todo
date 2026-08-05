@@ -12,11 +12,11 @@
     <!-- ── Task Rendering Panel ───────────────────────────────── -->
     <section class="panel">
         <div class="filter-bar">
+            <button id="add-btn" class="add-btn" title="Add Task">+</button>
             <button class="status-btn active" data-filter="active">Active</button>
             <button class="status-btn" data-filter="completed">Completed</button>
-            <button class="status-btn" data-filter="trash">Trash</button>
-            <button id="filter-toggle" class="filter-toggle" title="Filters">⚙</button>
-            <button id="fab-btn" class="fab-btn" title="Add Task">+</button>
+            <button id="filter-toggle" class="filter-toggle" title="Filters">🔍</button>
+            <button id="settings-btn" class="settings-btn" title="Settings">⚙</button>
         </div>
         <div class="filters">
             <div class="filter-group">
@@ -50,9 +50,7 @@
           <div id="completed-section" class="section section-completed">
             <ul id="completed-list"></ul>
           </div>
-          <div id="deleted-section" class="section section-deleted">
-            <ul id="deleted-list"></ul>
-          </div>
+
         </div>
 
         <footer class="footer" id="footer">
@@ -61,54 +59,167 @@
         </footer>
     </section>
 
-  <!-- ── Add Task Dialog ──────────────────────────────────────── -->
-  <dialog id="add-task-dialog" aria-modal="true">
-    <form id="todo-form">
-      <h3 class="dialog-title">New Task</h3>
-      <input type="text" id="todo-input" placeholder="What needs to be done?" required>
+    <!-- ── Settings Dialog ─────────────────────────────────────── -->
+    <dialog id="settings-dialog" aria-modal="true">
+        <div class="settings-header">
+        <h3 class="dialog-title">Settings</h3>
+        <button id="settings-close" class="settings-close" title="Close">✕</button>
+        </div>
+        <nav class="settings-tabs">
+        <button class="settings-tab active" data-tab="notifications">Notifications</button>
+        <button class="settings-tab" data-tab="data">Data Management</button>
+        <button class="settings-tab" data-tab="personalization">Personalization</button>
+        <button class="settings-tab" data-tab="trash">Trash</button>
+        </nav>
+        <div class="settings-content">
+        <div id="settings-notifications" class="settings-tab-content active">
+            <div class="setting-row">
+            <span>Enable Notifications</span>
+            <label class="toggle">
+                <input type="checkbox" id="notif-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+            </div>
+            <p class="setting-hint">Notifications alert you when tasks are overdue or urgency changes.</p>
+        </div>
+        <div id="settings-data" class="settings-tab-content">
+            <div class="setting-row">
+            <span>Export Data</span>
+            <button id="export-data" class="settings-action-btn">Export JSON</button>
+            </div>
+            <div class="setting-row">
+            <span>Import Data</span>
+            <input type="file" id="import-data" accept=".json" style="display:none">
+            <button id="import-data-btn" class="settings-action-btn">Import JSON</button>
+            </div>
+            <div class="setting-row">
+            <span>Clear All Data</span>
+            <button id="clear-data" class="settings-action-btn danger">Clear</button>
+            </div>
+        </div>
+        <div id="settings-personalization" class="settings-tab-content">
+            <div class="setting-row">
+            <span>Reduce Motion</span>
+            <label class="toggle">
+                <input type="checkbox" id="motion-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+            </div>
+            <p class="setting-hint">Minimizes animations and transitions for reduced motion preference.</p>
+        </div>
+        <div id="settings-trash" class="settings-tab-content">
+            <ul id="settings-deleted-list"></ul>
+        </div>
+        </div>
+        <footer id="settings-footer" class="settings-footer">
+        <div id="settings-pagination" class="pagination"></div>
+        </footer>
+    </dialog>
 
-      <div class="dialog-fields">
-        <label>
-          Repeatable
-          <select id="repeat-select">
-            <option value="">None</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="30s">30s (test)</option>
-          </select>
-        </label>
-        <label>
-          Importance
-          <select id="importance-select">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <label>
-          Duration
-          <select id="duration-select">
-            <option value="5">5 min</option>
-            <option value="10">10 min</option>
-            <option value="30">30 min</option>
-            <option value="60">1 hr</option>
-            <option value="multi">Multiple hours</option>
-          </select>
-        </label>
-      </div>
-        <label>
-          Deadline
-          <input type="datetime-local" id="deadline-input">
-        </label>
-      <div class="dialog-buttons">
-        <button type="button" id="dialog-delete" class="dialog-delete" style="display: none;">Delete</button>
-        <button type="button" id="dialog-cancel" class="dialog-cancel">Cancel</button>
-        <button type="submit" class="dialog-submit">Add</button>
-      </div>
-    </form>
-  </dialog>
+    <!-- ── Add Task Dialog ──────────────────────────────────────── -->
+    <dialog id="add-task-dialog" aria-modal="true">
+        <form id="todo-form">
+        <h3 class="dialog-title">New Task</h3>
+        <input type="text" id="todo-input" placeholder="What needs to be done?" required>
 
-  <script src="app.js"></script>
+        <div class="dialog-fields">
+            <label>
+            Repeatable
+            <select id="repeat-select">
+                <option value="">None</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="30s">30s (test)</option>
+            </select>
+            </label>
+            <label>
+            Importance
+            <select id="importance-select">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+            </select>
+            </label>
+            <label>
+            Duration
+            <select id="duration-select">
+                <option value="5">5 min</option>
+                <option value="10">10 min</option>
+                <option value="30">30 min</option>
+                <option value="60">1 hr</option>
+                <option value="multi">Multiple hours</option>
+            </select>
+            </label>
+        </div>
+            <label>
+            Deadline
+            <input type="datetime-local" id="deadline-input">
+            </label>
+        <div class="dialog-buttons">
+            <button type="button" id="dialog-delete" class="dialog-delete" style="display: none;">Delete</button>
+            <button type="button" id="dialog-cancel" class="dialog-cancel">Cancel</button>
+            <button type="submit" class="dialog-submit">Add</button>
+        </div>
+        </form>
+    </dialog>
+
+    <div id="settings-panel" class="settings-panel hidden">
+        <div class="settings-header">
+        <h3 class="dialog-title">Settings</h3>
+        <button id="settings-close" class="settings-close" title="Close">✕</button>
+        </div>
+        <nav class="settings-tabs">
+        <button class="settings-tab active" data-tab="notifications">Notifications</button>
+        <button class="settings-tab" data-tab="data">Data Management</button>
+        <button class="settings-tab" data-tab="personalization">Personalization</button>
+        <button class="settings-tab" data-tab="trash">Trash</button>
+        </nav>
+        <div class="settings-content">
+        <div id="settings-notifications" class="settings-tab-content active">
+            <div class="setting-row">
+            <span>Enable Notifications</span>
+            <label class="toggle">
+                <input type="checkbox" id="notif-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+            </div>
+            <p class="setting-hint">Notifications alert you when tasks are overdue or urgency changes.</p>
+        </div>
+        <div id="settings-data" class="settings-tab-content">
+            <div class="setting-row">
+            <span>Export Data</span>
+            <button id="export-data" class="settings-action-btn">Export JSON</button>
+            </div>
+            <div class="setting-row">
+            <span>Import Data</span>
+            <input type="file" id="import-data" accept=".json" style="display:none">
+            <button id="import-data-btn" class="settings-action-btn">Import JSON</button>
+            </div>
+            <div class="setting-row">
+            <span>Clear All Data</span>
+            <button id="clear-data" class="settings-action-btn danger">Clear</button>
+            </div>
+        </div>
+        <div id="settings-personalization" class="settings-tab-content">
+            <div class="setting-row">
+            <span>Reduce Motion</span>
+            <label class="toggle">
+                <input type="checkbox" id="motion-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+            </div>
+            <p class="setting-hint">Minimizes animations and transitions for reduced motion preference.</p>
+        </div>
+        <div id="settings-trash" class="settings-tab-content">
+            <ul id="settings-deleted-list"></ul>
+        </div>
+        </div>
+        <footer id="settings-footer" class="settings-footer">
+        <div id="settings-pagination" class="pagination"></div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>

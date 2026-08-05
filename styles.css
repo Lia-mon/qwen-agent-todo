@@ -25,7 +25,9 @@ body {
   padding: 15px;
   display: flex;
   flex-direction: column;
-  height:95vh;
+  height: 95vh;
+  position: relative;
+  overflow: hidden;
 }
 
 .panel-title {
@@ -35,6 +37,219 @@ body {
   text-transform: uppercase;
   letter-spacing: 1px;
   font-weight: 600;
+}
+
+/* ── Settings Dialog ────────────────────────────────────────── */
+
+#settings-dialog {
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  max-width: 835px;
+  width: 100%;
+  height: 95vh;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  background: #fff;
+  color: #333;
+  margin: auto;
+}
+
+#settings-dialog:open {
+  display: flex;
+  flex-direction: column;
+}
+
+#settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.settings-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #888;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.settings-close:hover {
+  background: #f0f0f0;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 2px solid #eee;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #666;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  margin-bottom: -2px;
+}
+
+.settings-tab:hover {
+  color: #3498db;
+}
+
+.settings-tab.active {
+  color: #3498db;
+  border-bottom-color: #3498db;
+}
+
+.settings-content {
+  padding: 20px 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.settings-tab-content {
+  display: none;
+}
+
+.settings-tab-content.active {
+  display: block;
+}
+
+.settings-footer {
+  padding: 12px 24px;
+  border-top: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-hint {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.settings-action-btn {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settings-action-btn:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.settings-action-btn.danger {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.settings-action-btn.danger:hover {
+  background: #e74c3c;
+  color: #fff;
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #ccc;
+  border-radius: 24px;
+  transition: background 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: #3498db;
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ── Settings Button ────────────────────────────────────────── */
+
+.settings-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: #f0f0f0;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
+
+.settings-btn:hover {
+  background: #e0e0e0;
 }
 
 /* ── Responsive: task panel takes full width on small screens ─ */
@@ -56,9 +271,15 @@ body {
     height:100vh;
   }
 
-  .fab-btn {
+  .add-btn {
     width: 40px;
     height: 40px;
+  }
+
+  #settings-dialog {
+    border-radius: 0;
+    margin-bottom: 0;
+    height:100vh;
   }
 }
 
@@ -228,9 +449,9 @@ body {
   border-color: #3498db;
 }
 
-/* ── FAB Button ──────────────────────────────────────────────── */
+/* ── Add Button ─────────────────────────────────────────────── */
 
-.fab-btn {
+.add-btn {
   width: 40px;
   height: 40px;
   border-radius: 8px;
@@ -245,7 +466,7 @@ body {
   flex-shrink: 0;
 }
 
-.fab-btn:hover {
+.add-btn:hover {
   background: #2980b9;
   transform: scale(1.05);
 }
@@ -641,6 +862,8 @@ body {
   text-align: center;
 }
 
+
+
 /* ── Reduced Motion ─────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -648,5 +871,16 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+:root {
+  --reduce-motion: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

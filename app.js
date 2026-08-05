@@ -20,7 +20,7 @@
 const dialog = document.getElementById('add-task-dialog');
 
 /** @type {HTMLButtonElement} */
-const fabBtn = document.getElementById('fab-btn');
+const addBtn = document.getElementById('add-btn');
 
 /** @type {HTMLFormElement} */
 const todoForm = document.getElementById('todo-form');
@@ -50,6 +50,19 @@ const footer = document.getElementById('footer');
 /** @type {HTMLElement} */
 const countEl = document.getElementById('count');
 
+/** @type {HTMLDialogElement} */
+const settingsDialog = document.getElementById('settings-dialog');
+
+/** @type {HTMLElement} */
+const settingsClose = document.getElementById('settings-close');
+
+/** @type {HTMLElement} */
+const settingsDeletedList = document.getElementById('settings-deleted-list');
+
+/** @type {HTMLElement} */
+const settingsPagination = document.getElementById('settings-pagination');
+
+/** Items per page for completed and trash views. */
 /** @type {HTMLButtonElement} */
 const dialogCancel = document.getElementById('dialog-cancel');
 
@@ -93,6 +106,9 @@ let deleted = [];
 
 /** @type {number | null} */
 let editingTodoId = null;
+
+/** @type {'notifications'|'data'|'personalization'|'trash'} */
+let activeSettingsTab = 'notifications';
 
 /** Items per page for completed and trash views. */
 const PAGE_SIZE = 10;
@@ -595,7 +611,7 @@ function matchesFilters(todo, isActive) {
 const LIST_MAP = {
   active: 'active-list',
   completed: 'completed-list',
-  deleted: 'deleted-list',
+  deleted: 'settings-deleted-list',
 };
 
 /**
@@ -664,11 +680,9 @@ function removeTodoFromDOM(id) {
 function render() {
   const activeList = document.getElementById('active-list');
   const completedList = document.getElementById('completed-list');
-  const deletedList = document.getElementById('deleted-list');
 
   activeList.innerHTML = '';
   completedList.innerHTML = '';
-  deletedList.innerHTML = '';
 
   todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
 
@@ -676,30 +690,23 @@ function render() {
 
   const activeItems = active.filter(todo => matchesFilters(todo, true));
   const completedItems = completed.filter(todo => matchesFilters(todo, false));
-  const deletedItems = deleted.filter(todo => matchesFilters(todo, false));
 
   activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
 
-  // Paginate completed and trash lists
+  // Paginate completed list
   const completedTotal = completedItems.length;
-  const trashTotal = deletedItems.length;
   const completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
-  const trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
 
   // Clamp pages
   completedPage = Math.min(completedPage, completedPages);
-  trashPage = Math.min(trashPage, trashPages);
 
   const completedStart = (completedPage - 1) * PAGE_SIZE;
-  const deletedStart = (trashPage - 1) * PAGE_SIZE;
 
   completedItems.slice(completedStart, completedStart + PAGE_SIZE)
     .forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
-  deletedItems.slice(deletedStart, deletedStart + PAGE_SIZE)
-    .forEach(todo => deletedList.appendChild(buildItem(todo, 'deleted')));
 
   // Show empty state when the current view has no items
-  const hasItems = activeItems.length || completedItems.length || deletedItems.length;
+  const hasItems = activeItems.length || completedItems.length;
   if (!hasItems) {
     const emptyMsg = document.createElement('li');
     emptyMsg.className = 'empty-state';
@@ -707,19 +714,20 @@ function render() {
     activeList.appendChild(emptyMsg);
   }
 
-  updateFooter(completedTotal, completedPages, trashTotal, trashPages);
+  updateFooter(completedTotal, completedPages);
   updateFilterButtons();
+  if (activeSettingsTab === 'trash') renderSettingsTrash();
 }
 
 /**
- * Renders pagination controls in the footer.
+ * Renders pagination controls.
  * @param {number} total - Total items
  * @param {number} totalPages - Total pages
  * @param {number} currentPage - Current page number
  * @param {'completed'|'trash'} view - View name
  */
 function renderPagination(total, totalPages, currentPage, view) {
-  const pagination = document.getElementById('pagination');
+  const pagination = view === 'trash' ? settingsPagination : document.getElementById('pagination');
   if (!pagination) return;
 
   if (totalPages <= 1) {
@@ -732,9 +740,13 @@ function renderPagination(total, totalPages, currentPage, view) {
   prevBtn.textContent = '‹';
   prevBtn.disabled = currentPage <= 1;
   prevBtn.addEventListener('click', () => {
-    if (view === 'completed') completedPage--;
-    else trashPage--;
-    render();
+    if (view === 'completed') {
+      completedPage--;
+      render();
+    } else {
+      trashPage--;
+      renderSettingsTrash();
+    }
   });
 
   const pageInfo = document.createElement('span');
@@ -746,9 +758,13 @@ function renderPagination(total, totalPages, currentPage, view) {
   nextBtn.textContent = '›';
   nextBtn.disabled = currentPage >= totalPages;
   nextBtn.addEventListener('click', () => {
-    if (view === 'completed') completedPage++;
-    else trashPage++;
-    render();
+    if (view === 'completed') {
+      completedPage++;
+      render();
+    } else {
+      trashPage++;
+      renderSettingsTrash();
+    }
   });
 
   pagination.replaceChildren(prevBtn, pageInfo, nextBtn);
@@ -758,32 +774,57 @@ function renderPagination(total, totalPages, currentPage, view) {
  * Updates the footer visibility and count based on current view.
  * Pagination params are optional — computed internally when omitted.
  */
-function updateFooter(completedTotal, completedPages, trashTotal, trashPages) {
+function updateFooter(completedTotal, completedPages) {
   const hasItems = active.length || completed.length || deleted.length;
   footer.style.display = hasItems ? 'flex' : 'none';
 
   if (!hasItems) return;
 
   // Compute filtered pagination totals if not provided
-  if (trashTotal === undefined) {
-    trashTotal = deleted.filter(t => matchesFilters(t, false)).length;
-    trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
-  }
   if (completedTotal === undefined) {
     completedTotal = completed.filter(t => matchesFilters(t, false)).length;
     completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
   }
 
-  if (statusFilter === 'trash') {
-    countEl.textContent = `${deleted.length} in trash`;
-    renderPagination(trashTotal, trashPages, trashPage, 'trash');
-  } else if (statusFilter === 'completed') {
+  if (statusFilter === 'completed') {
     countEl.textContent = `${completed.length} completed`;
     renderPagination(completedTotal, completedPages, completedPage, 'completed');
   } else {
     countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''} left`;
     document.getElementById('pagination').innerHTML = '';
   }
+}
+
+/**
+ * Renders trash items in the settings panel with pagination.
+ */
+function renderSettingsTrash() {
+  settingsDeletedList.innerHTML = '';
+  const deletedItems = deleted.filter(todo => matchesFilters(todo, false));
+  const trashTotal = deletedItems.length;
+  const trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
+
+  trashPage = Math.min(trashPage, trashPages);
+
+  const start = (trashPage - 1) * PAGE_SIZE;
+  deletedItems.slice(start, start + PAGE_SIZE)
+    .forEach(todo => settingsDeletedList.appendChild(buildItem(todo, 'deleted')));
+
+  if (trashTotal === 0) {
+    const emptyMsg = document.createElement('li');
+    emptyMsg.className = 'empty-state';
+    emptyMsg.textContent = 'Trash is empty.';
+    settingsDeletedList.appendChild(emptyMsg);
+  }
+
+  if (trashPages <= 1) {
+    settingsPagination.innerHTML = '';
+  } else {
+    renderPagination(trashTotal, trashPages, trashPage, 'trash');
+  }
+
+  // Update footer count for trash view
+  countEl.textContent = `${deleted.length} in trash`;
 }
 
 
@@ -1032,6 +1073,7 @@ async function deleteTodo(id) {
   trashPage = 1;
   updateFooter();
   updateFilterButtons();
+  if (activeSettingsTab === 'trash') renderSettingsTrash();
 }
 
 /**
@@ -1060,6 +1102,7 @@ async function restoreTrash(id) {
   trashPage = 1;
   updateFooter();
   updateFilterButtons();
+  if (activeSettingsTab === 'trash') renderSettingsTrash();
 }
 
 /**
@@ -1079,11 +1122,12 @@ async function permanentDeleteTrash(id) {
   trashPage = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
   updateFooter();
   updateFilterButtons();
+  if (activeSettingsTab === 'trash') renderSettingsTrash();
 }
 
 // ── Filter state ───────────────────────────────────────────────
 
-/** @type {'active' | 'completed' | 'trash'} */
+/** @type {'active' | 'completed'} */
 let statusFilter = 'active';
 
 /** Maps status filter values to CSS view classes. */
@@ -1101,7 +1145,7 @@ let urgencyFilter = 'all';
 // ── Events ─────────────────────────────────────────────────────
 
 // Open dialog
-fabBtn.addEventListener('click', () => {
+addBtn.addEventListener('click', () => {
   dialog.showModal();
   todoInput.focus();
 });
@@ -1166,11 +1210,40 @@ statusBtns.forEach(btn => {
     todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
     // Reset pagination when switching views
     if (statusFilter === 'completed') completedPage = 1;
-    if (statusFilter === 'trash') trashPage = 1;
     statusBtns.forEach(b => b.classList.toggle('active', b === btn));
     render();
   });
 });
+
+// Settings button
+const settingsBtn = document.getElementById('settings-btn');
+settingsBtn.addEventListener('click', () => {
+  settingsDialog.showModal();
+  switchSettingsTab(activeSettingsTab);
+});
+
+// Settings close button
+settingsClose.addEventListener('click', () => {
+  settingsDialog.close();
+});
+
+// Settings tabs
+const settingsTabs = document.querySelectorAll('.settings-tab');
+settingsTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchSettingsTab(tab.dataset.tab);
+  });
+});
+
+function switchSettingsTab(tabName) {
+  activeSettingsTab = tabName;
+  settingsTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.settings-tab-content').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById(`settings-${tabName}`);
+  if (panel) panel.classList.add('active');
+  settingsPagination.parentElement.classList.toggle('hidden', tabName !== 'trash');
+  if (tabName === 'trash') renderSettingsTrash();
+}
 
 // Extra filter buttons
 const filterBtns = document.querySelectorAll('.filter-btn');
@@ -1212,6 +1285,71 @@ todoList.addEventListener('click', (e) => {
       break;
   }
 });
+
+// ── Settings Panel Handlers ────────────────────────────────────
+
+function exportData() {
+  const data = { active, completed, deleted, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `todo-app-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.active) active = data.active;
+      if (data.completed) completed = data.completed;
+      if (data.deleted) deleted = data.deleted;
+      render();
+      alert('Data imported successfully!');
+    } catch (err) {
+      alert('Invalid JSON file.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+async function clearAllData() {
+  if (!confirm('Are you sure you want to clear ALL data? This cannot be undone.')) return;
+  if (!confirm('This will permanently delete all tasks. Continue?')) return;
+  active = [];
+  completed = [];
+  deleted = [];
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  tx.objectStore(STORE_NAME).clear();
+  await new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  render();
+  settingsDialog.close();
+}
+
+function toggleNotifications(e) {
+  if (e.target.checked) {
+    Notification.requestPermission().then((perm) => {
+      console.log('Notification permission:', perm);
+    });
+  }
+}
+
+function toggleMotion(e) {
+  if (e.target.checked) {
+    document.documentElement.style.setProperty('--reduce-motion', 'all');
+  } else {
+    document.documentElement.style.removeProperty('--reduce-motion');
+  }
+}
 
 // ── Service Worker Registration ────────────────────────────────
 
@@ -1284,6 +1422,13 @@ async function init() {
     updateTimers();
   }, 5 * 60 * 1000); // Update repeat tasks & timers every 5 minutes
   render();
+  // Setup settings panel event listeners
+  document.getElementById('export-data')?.addEventListener('click', exportData);
+  document.getElementById('import-data-btn')?.addEventListener('click', () => document.getElementById('import-data')?.click());
+  document.getElementById('import-data')?.addEventListener('change', importData);
+  document.getElementById('clear-data')?.addEventListener('click', clearAllData);
+  document.getElementById('notif-toggle')?.addEventListener('change', toggleNotifications);
+  document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
 }
 
 init();
