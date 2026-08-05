@@ -94,6 +94,15 @@ let deleted = [];
 /** @type {number | null} */
 let editingTodoId = null;
 
+/** Items per page for completed and trash views. */
+const PAGE_SIZE = 10;
+
+/** @type {number} */
+let completedPage = 1;
+
+/** @type {number} */
+let trashPage = 1;
+
 /**
  * DB Masks
  */
@@ -670,8 +679,24 @@ function render() {
   const deletedItems = deleted.filter(todo => matchesFilters(todo, false));
 
   activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
-  completedItems.forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
-  deletedItems.forEach(todo => deletedList.appendChild(buildItem(todo, 'deleted')));
+
+  // Paginate completed and trash lists
+  const completedTotal = completedItems.length;
+  const trashTotal = deletedItems.length;
+  const completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
+  const trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
+
+  // Clamp pages
+  completedPage = Math.min(completedPage, completedPages);
+  trashPage = Math.min(trashPage, trashPages);
+
+  const completedStart = (completedPage - 1) * PAGE_SIZE;
+  const deletedStart = (trashPage - 1) * PAGE_SIZE;
+
+  completedItems.slice(completedStart, completedStart + PAGE_SIZE)
+    .forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
+  deletedItems.slice(deletedStart, deletedStart + PAGE_SIZE)
+    .forEach(todo => deletedList.appendChild(buildItem(todo, 'deleted')));
 
   // Show empty state when the current view has no items
   const hasItems = activeItems.length || completedItems.length || deletedItems.length;
@@ -682,25 +707,82 @@ function render() {
     activeList.appendChild(emptyMsg);
   }
 
-  updateFooter();
+  updateFooter(completedTotal, completedPages, trashTotal, trashPages);
   updateFilterButtons();
 }
 
 /**
- * Updates the footer visibility and count based on current view.
+ * Renders pagination controls in the footer.
+ * @param {number} total - Total items
+ * @param {number} totalPages - Total pages
+ * @param {number} currentPage - Current page number
+ * @param {'completed'|'trash'} view - View name
  */
-function updateFooter() {
+function renderPagination(total, totalPages, currentPage, view) {
+  const pagination = document.getElementById('pagination');
+  if (!pagination) return;
+
+  if (totalPages <= 1) {
+    pagination.innerHTML = '';
+    return;
+  }
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'page-btn';
+  prevBtn.textContent = '‹';
+  prevBtn.disabled = currentPage <= 1;
+  prevBtn.addEventListener('click', () => {
+    if (view === 'completed') completedPage--;
+    else trashPage--;
+    render();
+  });
+
+  const pageInfo = document.createElement('span');
+  pageInfo.className = 'page-info';
+  pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'page-btn';
+  nextBtn.textContent = '›';
+  nextBtn.disabled = currentPage >= totalPages;
+  nextBtn.addEventListener('click', () => {
+    if (view === 'completed') completedPage++;
+    else trashPage++;
+    render();
+  });
+
+  pagination.replaceChildren(prevBtn, pageInfo, nextBtn);
+}
+
+/**
+ * Updates the footer visibility and count based on current view.
+ * Pagination params are optional — computed internally when omitted.
+ */
+function updateFooter(completedTotal, completedPages, trashTotal, trashPages) {
   const hasItems = active.length || completed.length || deleted.length;
   footer.style.display = hasItems ? 'flex' : 'none';
 
   if (!hasItems) return;
 
+  // Compute filtered pagination totals if not provided
+  if (trashTotal === undefined) {
+    trashTotal = deleted.filter(t => matchesFilters(t, false)).length;
+    trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
+  }
+  if (completedTotal === undefined) {
+    completedTotal = completed.filter(t => matchesFilters(t, false)).length;
+    completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
+  }
+
   if (statusFilter === 'trash') {
     countEl.textContent = `${deleted.length} in trash`;
+    renderPagination(trashTotal, trashPages, trashPage, 'trash');
   } else if (statusFilter === 'completed') {
     countEl.textContent = `${completed.length} completed`;
+    renderPagination(completedTotal, completedPages, completedPage, 'completed');
   } else {
     countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''} left`;
+    document.getElementById('pagination').innerHTML = '';
   }
 }
 
@@ -876,6 +958,7 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration) {
 
   await dbPut(todo);
   updateTodoInDOM(todo);
+  completedPage = 1;
   updateFooter();
   updateFilterButtons();
 }
@@ -914,6 +997,8 @@ async function toggleTodo(id) {
   }
 
   await dbPut(todo);
+  completedPage = 1;
+  updateFooter();
   updateFilterButtons();
 }
 
@@ -944,6 +1029,7 @@ async function deleteTodo(id) {
   await dbPut(todo);
   const fromView = activeIdx !== -1 ? 'active' : 'completed';
   moveTo(todo, fromView, 'deleted');
+  trashPage = 1;
   updateFooter();
   updateFilterButtons();
 }
@@ -971,6 +1057,7 @@ async function restoreTrash(id) {
 
   await dbPut(todo);
   moveTo(todo, 'deleted', wasCompleted ? 'completed' : 'active');
+  trashPage = 1;
   updateFooter();
   updateFilterButtons();
 }
@@ -988,6 +1075,8 @@ async function permanentDeleteTrash(id) {
   deleted.splice(idx, 1);
   await dbDelete(id);
   removeTodoFromDOM(id);
+  const trashTotal = deleted.filter(t => matchesFilters(t, false)).length;
+  trashPage = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
   updateFooter();
   updateFilterButtons();
 }
@@ -1075,9 +1164,11 @@ statusBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     statusFilter = btn.dataset.filter;
     todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
+    // Reset pagination when switching views
+    if (statusFilter === 'completed') completedPage = 1;
+    if (statusFilter === 'trash') trashPage = 1;
     statusBtns.forEach(b => b.classList.toggle('active', b === btn));
-    updateFooter();
-    updateFilterButtons();
+    render();
   });
 });
 

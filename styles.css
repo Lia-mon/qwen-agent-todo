@@ -548,6 +548,7 @@ body {
   border-top: 2px solid #eee;
   font-size: 0.9rem;
   color: #888;
+  gap: 12px;
 }
 
 /* ── Section-based layout ───────────────────────────────────── */
@@ -599,6 +600,48 @@ body {
 
 .view-deleted .section-deleted {
   display: block;
+}
+
+/* ── Pagination ─────────────────────────────────────────────── */
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #eee;
+  margin-top: 8px;
+}
+
+.page-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.page-info {
+  font-size: 0.85rem;
+  color: #888;
+  min-width: 100px;
+  text-align: center;
 }
 
 /* ── Reduced Motion ─────────────────────────────────────────── */
