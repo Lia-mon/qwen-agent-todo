@@ -1288,30 +1288,83 @@ todoList.addEventListener('click', (e) => {
 
 // ── Settings Panel Handlers ────────────────────────────────────
 
-function exportData() {
-  const data = { active, completed, deleted, exportedAt: new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `todo-app-export-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportData() {
+  try {
+    const [activeArr, completedArr, deletedArr] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+    const data = {
+      active: activeArr,
+      completed: completedArr,
+      deleted: deletedArr,
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `todo-app-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Export failed:', err);
+    alert('Failed to export data.');
+  }
 }
 
-function importData(e) {
+async function importData(e) {
   const file = e.target.files[0];
   if (!file) return;
+
+  if (!confirm('Importing will overwrite all current data. Continue?')) {
+    e.target.value = '';
+    return;
+  }
+
   const reader = new FileReader();
-  reader.onload = (ev) => {
+  reader.onload = async (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (data.active) active = data.active;
-      if (data.completed) completed = data.completed;
-      if (data.deleted) deleted = data.deleted;
+      if (!data || (!data.active && !data.completed && !data.deleted)) {
+        alert('Invalid data file — no tasks found.');
+        return;
+      }
+
+      // Clear existing store
+      const clearTx = db.transaction(STORE_NAME, 'readwrite');
+      clearTx.objectStore(STORE_NAME).clear();
+      await new Promise((resolve, reject) => {
+        clearTx.oncomplete = resolve;
+        clearTx.onerror = () => reject(clearTx.error);
+      });
+
+      // Write imported tasks (strip IDs so auto-increment assigns fresh ones)
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      let count = 0;
+      for (const arr of [data.active, data.completed, data.deleted]) {
+        if (Array.isArray(arr)) {
+          for (const todo of arr) {
+            const { id, ...todoWithoutId } = todo;
+            const req = store.add(todoWithoutId);
+            req.onsuccess = () => count++;
+            req.onerror = () => console.warn('Failed to import todo:', req.error);
+          }
+        }
+      }
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      console.log(`Imported ${count} todos`);
+
+      // Refresh JS state
+      const [activeArr, completedArr, deletedArr] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+      active = activeArr;
+      completed = completedArr;
+      deleted = deletedArr;
       render();
       alert('Data imported successfully!');
     } catch (err) {
+      console.error('Import failed:', err);
       alert('Invalid JSON file.');
     }
   };
