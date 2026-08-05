@@ -1,0 +1,543 @@
+/* ═══════════════════════════════════════════
+   🦇 GOTHIC THEME — Dark, Dramatic, Ornate
+   ═══════════════════════════════════════════ */
+
+:root {
+  /* ── Colors ───────────────────────────── */
+  --color-bg: #0d0d0d;
+  --color-surface: #1a1a1a;
+  --color-text: #d4c8b8;
+  --color-text-secondary: #9a8e7e;
+  --color-text-muted: #6b6056;
+  --color-text-faint: #4a4238;
+  --color-text-tertiary: #7a6e60;
+
+  --color-primary: #8b0000;
+  --color-primary-hover: #a52a2a;
+  --color-primary-light: rgba(139, 0, 0, 0.4);
+
+  --color-border: #2a2a2a;
+  --color-border-light: #222222;
+  --color-border-lighter: #1f1f1f;
+
+  --color-danger: #cc0000;
+  --color-danger-hover: #990000;
+  --color-danger-light: rgba(204, 0, 0, 0.2);
+
+  --color-success: #2d5a2d;
+  --color-success-hover: #3d7a3d;
+
+  --color-warning: #8b6914;
+  --color-warning-light: rgba(139, 105, 20, 0.2);
+
+  /* ── Badge Colors ─────────────────────── */
+  --badge-importance-high-bg: rgba(204, 0, 0, 0.25);
+  --badge-importance-high-fg: #cc0000;
+  --badge-importance-medium-bg: rgba(139, 105, 20, 0.25);
+  --badge-importance-medium-fg: #b8860b;
+  --badge-importance-low-bg: rgba(100, 80, 60, 0.25);
+  --badge-importance-low-fg: #8a7e6e;
+
+  --badge-urgency-stressy-bg: rgba(204, 0, 0, 0.25);
+  --badge-urgency-stressy-fg: #cc0000;
+  --badge-urgency-balanced-bg: rgba(139, 105, 20, 0.25);
+  --badge-urgency-balanced-fg: #b8860b;
+  --badge-urgency-lax-bg: rgba(45, 90, 45, 0.25);
+  --badge-urgency-lax-fg: #4a7a4a;
+
+  --badge-repeatable-bg: rgba(45, 90, 45, 0.25);
+  --badge-repeatable-fg: #4a7a4a;
+  --badge-deadline-bg: rgba(255, 255, 255, 0.03);
+  --badge-deadline-fg: #5a5048;
+
+  /* ── Sizing ───────────────────────────── */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-btn: none;
+
+  /* ── Transitions ──────────────────────── */
+  --transition-fast: 0.3s;
+  --transition-base: 0.3s;
+}
+
+body {
+  font-family: 'Cinzel', 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  background-image: none;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.008) 2px,
+    rgba(255, 255, 255, 0.008) 4px
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+.panel {
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+}
+
+.panel::before {
+  content: '⛧';
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 1.2rem;
+  opacity: 0.3;
+  color: var(--color-danger);
+}
+
+.panel-title {
+  color: var(--color-danger);
+  letter-spacing: 3px;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(139, 0, 0, 0.3);
+  position: relative;
+  padding-left: 24px;
+}
+
+.panel-title::before {
+  content: '☠';
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+#settings-dialog {
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+}
+
+#settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: none;
+}
+
+#settings-dialog:open {
+  padding: 15px;
+}
+
+.settings-header {
+  border-bottom-width: 1px;
+}
+
+.settings-tabs {
+  border-bottom-width: 1px;
+}
+
+.settings-tab {
+  transition: color var(--transition-base), background var(--transition-base);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.settings-tab:hover {
+  background: var(--color-border-lighter);
+}
+
+.settings-tab.active {
+  background: var(--color-primary);
+  color: var(--color-text);
+  border-bottom-color: transparent;
+}
+
+.settings-content {
+  padding: 16px 20px;
+}
+
+.settings-footer {
+  border-top-width: 1px;
+  padding: 12px 20px;
+}
+
+.setting-row {
+  border-bottom-width: 1px;
+}
+
+.setting-hint {
+  font-style: normal;
+  font-family: inherit;
+}
+
+.settings-action-btn {
+  background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
+  border-radius: 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  transition: all var(--transition-base);
+}
+
+.settings-action-btn:hover {
+  background: var(--color-border-light);
+  color: var(--color-text);
+}
+
+.settings-action-btn.danger {
+  color: var(--color-danger);
+}
+
+.settings-action-btn.danger:hover {
+  background: var(--color-danger);
+  color: var(--color-text);
+}
+
+.theme-btn {
+  border-radius: 0;
+  background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-family: inherit;
+}
+
+.theme-btn:hover {
+  background: var(--color-border-light);
+  color: var(--color-text);
+}
+
+.theme-btn.active {
+  background: var(--color-primary);
+  color: var(--color-text);
+}
+
+.toggle-slider {
+  background: var(--color-border-light);
+  border-radius: 0;
+}
+
+.toggle-slider::before {
+  border-radius: 0;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: var(--color-primary);
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  border-radius: 0;
+  transition: background var(--transition-base);
+}
+
+.settings-btn::before {
+  content: '☠';
+}
+
+.settings-btn:hover {
+  background: var(--color-border-light);
+  transform: none;
+}
+
+.add-btn {
+  border-radius: 0;
+  background: var(--color-primary);
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.add-btn:hover {
+  background: var(--color-primary-hover);
+  transform: none;
+}
+
+.status-btn {
+  border-radius: 0;
+  background: var(--color-border-lighter);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.status-btn:hover {
+  background: var(--color-border-light);
+}
+
+.status-btn.active {
+  background: var(--color-primary);
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  border-radius: 0;
+}
+
+.filter-toggle::before {
+  content: '🕯️';
+}
+
+.filter-toggle:hover {
+  background: var(--color-border-light);
+  transform: none;
+}
+
+.filter-toggle.active {
+  background: var(--color-primary);
+}
+
+.filter-btn {
+  border-radius: 0;
+  background: transparent;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  font-family: inherit;
+}
+
+.filter-btn:hover {
+  background: var(--color-border-lighter);
+}
+
+.filter-btn.active {
+  background: var(--color-primary);
+}
+
+.filters {
+  border-bottom-width: 1px;
+}
+
+.filter-group-label {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.todo-item {
+  border-bottom-width: 1px;
+}
+
+.todo-item .checkbox {
+  border-radius: 0;
+  border-width: 1px;
+}
+
+.todo-item.completed .checkbox {
+  border-radius: 0;
+}
+
+.todo-item .text {
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+.todo-item.completed .text {
+  color: var(--color-text-muted);
+}
+
+.badge {
+  border-radius: 0;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-family: inherit;
+}
+
+.todo-item .timestamps {
+  font-family: inherit;
+}
+
+.todo-item .timestamp.created {
+  color: var(--color-text-muted);
+}
+
+.todo-item .timestamp.completed {
+  color: var(--color-success);
+}
+
+.todo-item .timestamp.deleted {
+  color: var(--color-danger);
+}
+
+.trash-actions {
+  gap: 4px;
+}
+
+.trash-btn {
+  border-radius: 0;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.restore-btn {
+  border-radius: 0;
+  font-weight: 700;
+}
+
+.restore-btn:hover {
+  transform: none;
+}
+
+.perm-delete-btn {
+  border-radius: 0;
+  font-weight: 700;
+}
+
+.perm-delete-btn:hover {
+  transform: none;
+}
+
+.todo-item .delete-btn {
+  font-weight: 700;
+}
+
+.empty-state {
+  font-family: inherit;
+  letter-spacing: 1px;
+}
+
+.footer {
+  border-top-width: 1px;
+  font-family: inherit;
+}
+
+.section {
+  margin-bottom: 12px;
+}
+
+.section h3 {
+  letter-spacing: 2px;
+  font-weight: 700;
+}
+
+.section ul li {
+  padding: 6px 0;
+}
+
+#add-task-dialog {
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+}
+
+#add-task-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: none;
+}
+
+#add-task-dialog form {
+  padding: 20px;
+}
+
+.dialog-title {
+  color: var(--color-danger);
+  letter-spacing: 3px;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(139, 0, 0, 0.3);
+  font-family: inherit;
+}
+
+#todo-input {
+  border-radius: 0;
+  background: var(--color-border-lighter);
+  color: var(--color-text);
+  font-family: inherit;
+}
+
+#todo-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: none;
+}
+
+#todo-input::placeholder {
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+
+.dialog-submit {
+  border-radius: 0;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-family: inherit;
+}
+
+.dialog-submit:hover {
+  transform: none;
+}
+
+.dialog-cancel {
+  border-radius: 0;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.dialog-cancel:hover {
+  transform: none;
+}
+
+.dialog-delete {
+  border-radius: 0;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.dialog-delete:hover {
+  transform: none;
+}
+
+.dialog-fields {
+  gap: 8px;
+}
+
+.dialog-fields label {
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-family: inherit;
+}
+
+.dialog-fields select,
+.dialog-fields input[type="datetime-local"],
+#todo-form > label input[type="datetime-local"] {
+  border-radius: 0;
+  background: var(--color-border-lighter);
+  color: var(--color-text);
+  font-family: inherit;
+}
+
+.dialog-fields select:focus,
+.dialog-fields input[type="datetime-local"]:focus,
+#todo-form > label input[type="datetime-local"]:focus {
+  border-color: var(--color-primary);
+  box-shadow: none;
+}
+
+.page-btn {
+  border-radius: 0;
+  background: var(--color-border-lighter);
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--color-border-light);
+  transform: none;
+}
+
+.page-btn:disabled {
+  transform: none;
+}
+
+.page-info {
+  font-family: inherit;
+}
+
+.pagination {
+  border-top-width: 1px;
+}

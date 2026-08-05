@@ -1431,7 +1431,7 @@ async function init() {
   document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
 
   // Theme buttons
-  const savedTheme = localStorage.getItem('theme') || 'classic';
+  const savedTheme = (localStorage.getItem('theme') === 'classic') ? 'styles' : (localStorage.getItem('theme') || 'styles');
   applyTheme(savedTheme);
   document.querySelectorAll('.theme-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1446,9 +1446,15 @@ async function init() {
  */
 function applyTheme(theme) {
   localStorage.setItem('theme', theme);
-  const themeLink = document.getElementById('theme-stylesheet');
-  if (themeLink) themeLink.disabled = theme !== 'girly';
-  document.querySelector('meta[name="theme-color"]').content = theme === 'girly' ? '#ff69b4' : '#3498db';
+  if (theme === 'styles') {
+    document.querySelectorAll('[id^="theme-"]').forEach(link => link.disabled = true);
+  } else {
+    document.querySelectorAll('[id^="theme-"]').forEach(link => link.disabled = true);
+    const themeLink = document.getElementById(`theme-${theme}`);
+    if (themeLink) themeLink.disabled = false;
+  }
+  const colorMap = { styles: '#3498db', girly: '#ff69b4', suave: '#0f3460', gothic: '#8b0000', farm: '#6b8e23' };
+  document.querySelector('meta[name="theme-color"]').content = colorMap[theme] || '#3498db';
   document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
 }
 

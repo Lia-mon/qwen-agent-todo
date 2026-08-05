@@ -1,0 +1,338 @@
+/* ═══════════════════════════════════════════
+   🍷 SUAVE THEME — Sharp, Sophisticated, Cool
+   ═══════════════════════════════════════════ */
+
+:root {
+  /* ── Colors ───────────────────────────── */
+  --color-bg: #1a1a2e;
+  --color-surface: #16213e;
+  --color-text: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #707070;
+  --color-text-faint: #555555;
+  --color-text-tertiary: #808080;
+
+  --color-primary: #0f3460;
+  --color-primary-hover: #1a5276;
+  --color-primary-light: rgba(15, 52, 96, 0.5);
+
+  --color-border: #2c3e6b;
+  --color-border-light: #1f3050;
+  --color-border-lighter: #1a2540;
+
+  --color-danger: #e94560;
+  --color-danger-hover: #c0392b;
+  --color-danger-light: rgba(233, 69, 96, 0.15);
+
+  --color-success: #27ae60;
+  --color-success-hover: #229954;
+
+  --color-warning: #f39c12;
+  --color-warning-light: rgba(243, 156, 18, 0.15);
+
+  /* ── Badge Colors ─────────────────────── */
+  --badge-importance-high-bg: rgba(233, 69, 96, 0.2);
+  --badge-importance-high-fg: #e94560;
+  --badge-importance-medium-bg: rgba(243, 156, 18, 0.2);
+  --badge-importance-medium-fg: #f39c12;
+  --badge-importance-low-bg: rgba(15, 52, 96, 0.3);
+  --badge-importance-low-fg: #5dade2;
+
+  --badge-urgency-stressy-bg: rgba(233, 69, 96, 0.2);
+  --badge-urgency-stressy-fg: #e94560;
+  --badge-urgency-balanced-bg: rgba(243, 156, 18, 0.2);
+  --badge-urgency-balanced-fg: #f39c12;
+  --badge-urgency-lax-bg: rgba(39, 174, 96, 0.2);
+  --badge-urgency-lax-fg: #27ae60;
+
+  --badge-repeatable-bg: rgba(39, 174, 96, 0.2);
+  --badge-repeatable-fg: #27ae60;
+  --badge-deadline-bg: rgba(255, 255, 255, 0.05);
+  --badge-deadline-fg: #707070;
+
+  /* ── Sizing ───────────────────────────── */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-btn: none;
+
+  /* ── Transitions ──────────────────────── */
+  --transition-fast: 0.15s;
+  --transition-base: 0.15s;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.panel {
+  border: 1px solid var(--color-border);
+}
+
+#settings-dialog {
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+}
+
+#settings-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: none;
+}
+
+.settings-tab {
+  transition: color var(--transition-base), background var(--transition-base);
+}
+
+.settings-tab:hover {
+  background: var(--color-border-lighter);
+}
+
+.settings-tab.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.settings-action-btn {
+  background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.settings-action-btn:hover {
+  background: var(--color-border-light);
+  color: var(--color-text);
+}
+
+.settings-action-btn.danger {
+  color: var(--color-danger);
+}
+
+.settings-action-btn.danger:hover {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.theme-btn {
+  border-width: 1px;
+  background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.theme-btn:hover {
+  background: var(--color-border-light);
+  color: var(--color-text);
+}
+
+.theme-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.toggle-slider {
+  background: var(--color-border-light);
+}
+
+.toggle input:checked + .toggle-slider {
+  background: var(--color-primary);
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: background var(--transition-base);
+}
+
+.settings-btn::before {
+  content: '🎩';
+}
+
+.settings-btn:hover {
+  background: var(--color-border-light);
+}
+
+.add-btn {
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  box-shadow: none;
+}
+
+.add-btn:hover {
+  background: var(--color-primary-hover);
+  transform: none;
+}
+
+.status-btn {
+  border-radius: var(--radius-sm);
+  background: var(--color-border-lighter);
+}
+
+.status-btn:hover {
+  background: var(--color-border-light);
+}
+
+.status-btn.active {
+  background: var(--color-primary);
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  border-radius: var(--radius-sm);
+}
+
+.filter-toggle::before {
+  content: '🔎';
+}
+
+.filter-toggle:hover {
+  background: var(--color-border-light);
+}
+
+.filter-toggle.active {
+  background: var(--color-primary);
+}
+
+.filter-btn {
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-weight: 600;
+}
+
+.filter-btn:hover {
+  background: var(--color-border-lighter);
+}
+
+.filter-btn.active {
+  background: var(--color-primary);
+}
+
+.todo-item .checkbox {
+  border-radius: var(--radius-sm);
+  border-width: 1px;
+}
+
+.todo-item.completed .checkbox {
+  border-radius: var(--radius-sm);
+}
+
+.todo-item .checkbox::after {
+  border-width: 0 2px 2px 0;
+}
+
+.todo-item .text {
+  font-weight: 400;
+}
+
+.todo-item.completed .text {
+  color: var(--color-text-muted);
+}
+
+.badge {
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+}
+
+.dialog-submit {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.dialog-submit:hover {
+  transform: none;
+}
+
+.dialog-cancel {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.dialog-cancel:hover {
+  transform: none;
+}
+
+.dialog-delete {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.dialog-delete:hover {
+  transform: none;
+}
+
+.dialog-fields select,
+.dialog-fields input[type="datetime-local"],
+#todo-input,
+#todo-form > label input[type="datetime-local"] {
+  border-radius: var(--radius-sm);
+  background: var(--color-border-lighter);
+  color: var(--color-text);
+}
+
+.dialog-fields select:focus,
+.dialog-fields input[type="datetime-local"]:focus,
+#todo-input:focus,
+#todo-form > label input[type="datetime-local"]:focus {
+  border-color: var(--color-primary);
+  box-shadow: none;
+}
+
+.page-btn {
+  border-radius: var(--radius-sm);
+  background: var(--color-border-lighter);
+  font-weight: 600;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--color-border-light);
+  transform: none;
+}
+
+.page-btn:disabled {
+  transform: none;
+}
+
+.restore-btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.restore-btn:hover {
+  transform: none;
+}
+
+.perm-delete-btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.perm-delete-btn:hover {
+  transform: none;
+}
+
+.trash-btn {
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.section h3 {
+  letter-spacing: 1px;
+}
+
+.footer {
+  border-top-width: 1px;
+}
+
+.pagination {
+  border-top-width: 1px;
+}

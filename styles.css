@@ -352,13 +352,17 @@ body {
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-border-lighter);
-  font-size: 1.2rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background var(--transition-base), transform var(--transition-base);
   flex-shrink: 0;
+  font-size: 1.2rem;
+}
+
+.settings-btn::before {
+  content: '⚙';
 }
 
 .settings-btn:hover {
@@ -624,13 +628,17 @@ body {
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-border-lighter);
-  font-size: 1.2rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background var(--transition-base), transform var(--transition-base);
   flex-shrink: 0;
+  font-size: 1.2rem;
+}
+
+.filter-toggle::before {
+  content: '🔍';
 }
 
 .filter-toggle:hover {
