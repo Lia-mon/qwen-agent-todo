@@ -143,6 +143,9 @@ A vanilla HTML/CSS/JS Progressive Web App (PWA) for task management with urgency
 - [x] Fix: `dbPut` returns assigned ID via `request.result`; added `dbAdd()` for new-item inserts
 - [x] Fix: `addTodo` uses `dbAdd()` and assigns `todo.id` before DOM operations — fixes `data-id="undefined"` breaking event delegation on new elements
 - [x] Cleanup: Removed debug `console.log` from `addTodoToDOM()` and event delegation handler
+- [x] **Code review cleanup** — extracted duplicate `classMap` to module-level `VIEW_CLASS_MAP`; consolidated 3 `querySelector` calls in `moveToActive` to single group selector; removed dead `.todo-item .delete-btn` CSS; fixed `padding-bottom: 0px` → `0`; merged duplicate label styles in CSS
+- [x] **DB store recovery** — added `ensureStore()` in `init()`: checks if `todos` store exists, and if missing (e.g. after manual DB deletion), closes connection, deletes DB, and reopens fresh to force `onupgradeneeded`
+- [x] **Form `method="dialog"` removal** — was causing dialog to close synchronously on submit before async `addTodo` completed
 
 ## Next Steps
 
@@ -193,3 +196,5 @@ A vanilla HTML/CSS/JS Progressive Web App (PWA) for task management with urgency
 - In-memory urgency tracking with grouped notifications
 - Data-id-based DOM updates in `updateTimers()`
 - Simplified DB queries, consolidated purge logic, cleaner notification code
+- **Cleaned up** — removed dead CSS, extracted duplicate constants, consolidated filter logic, fixed JSDoc return types
+- **DB recovery** — `ensureStore()` handles corrupted/missing object store by deleting and recreating the DB

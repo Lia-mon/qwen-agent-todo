@@ -56,6 +56,12 @@ const dialogCancel = document.getElementById('dialog-cancel');
 /** @type {HTMLButtonElement} */
 const dialogDelete = document.getElementById('dialog-delete');
 
+/** @type {HTMLElement} */
+const dialogTitle = document.querySelector('.dialog-title');
+
+/** @type {HTMLElement} */
+const dialogSubmit = document.querySelector('.dialog-submit');
+
 /** @type {HTMLButtonElement} */
 const filterToggle = document.getElementById('filter-toggle');
 
@@ -87,6 +93,14 @@ let deleted = [];
 
 /** @type {number | null} */
 let editingTodoId = null;
+
+/**
+ * DB Masks
+ */
+const DB_GET_ACTIVE = 1;
+const DB_GET_COMPLETED = 2;
+const DB_GET_DELETED = 4;
+
 
 /**
  * Opens the IndexedDB database with a single 'todos' store and indexes.
@@ -121,7 +135,7 @@ function openDB() {
 /**
  * Inserts or updates a todo in the store.
  * @param {Todo} todo
- * @returns {Promise<void>}
+ * @returns {Promise<number>} The stored key (id).
  */
 function dbPut(todo) {
   return new Promise((resolve, reject) => {
@@ -164,68 +178,32 @@ function dbDelete(id) {
 }
 
 /**
- * Retrieves active todos (deleted = 0, completed = 0).
- * @returns {Promise<Todo[]>}
+ * Retrieves todos from the store, filtered by the given bitmask.
+ * @param {number} mask - Bitmask: DB_GET_ACTIVE (1), DB_GET_COMPLETED (2), DB_GET_DELETED (4)
+ * @returns {Promise<Todo[][]>}
  */
-function dbGetActive() {
+function dbGet(mask) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     const request = store.openCursor();
-    const results = [];
+    const active = [];
+    const completed = [];
+    const deleted = [];
     request.onsuccess = (event) => {
       const cursor = event.target.result;
       if (cursor) {
-        if (cursor.value.deleted === 0 && cursor.value.completed === 0) results.push(cursor.value);
+        const todo = cursor.value;
+        if ((mask & DB_GET_ACTIVE) && todo.deleted === 0 && todo.completed === 0) {
+          active.push(todo);
+        } else if ((mask & DB_GET_COMPLETED) && todo.deleted === 0 && todo.completed === 1) {
+          completed.push(todo);
+        } else if ((mask & DB_GET_DELETED) && todo.deleted === 1) {
+          deleted.push(todo);
+        }
         cursor.continue();
       } else {
-        resolve(results);
-      }
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
-/**
- * Retrieves completed todos (completed = 1, deleted = 0).
- * @returns {Promise<Todo[]>}
- */
-function dbGetCompleted() {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.openCursor();
-    const results = [];
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-      if (cursor) {
-        if (cursor.value.deleted === 0 && cursor.value.completed === 1) results.push(cursor.value);
-        cursor.continue();
-      } else {
-        resolve(results);
-      }
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
-/**
- * Retrieves deleted todos (deleted = 1).
- * @returns {Promise<Todo[]>}
- */
-function dbGetDeleted() {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.openCursor();
-    const results = [];
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-      if (cursor) {
-        if (cursor.value.deleted === 1) results.push(cursor.value);
-        cursor.continue();
-      } else {
-        resolve(results);
+        resolve([active, completed, deleted]);
       }
     };
     request.onerror = () => reject(request.error);
@@ -330,25 +308,17 @@ function sendGroupedNotification(changes) {
   const reEmerges = changes.filter(c => c.type === 're-emerged');
   const urgencyChanges = changes.filter(c => c.type === 'urgency-change');
 
-  let title;
-  if (reEmerges.length && urgencyChanges.length) {
-    title = `${reEmerges.length} task${'s'} re-emerged, ${urgencyChanges.length} urgency change${urgencyChanges.length > 1 ? 's' : ''}`;
-  } else if (reEmerges.length) {
-    title = `${reEmerges.length} task${reEmerges.length > 1 ? 's' : ''} re-emerged`;
-  } else {
-    title = `${urgencyChanges.length} urgency change${urgencyChanges.length > 1 ? 's' : ''}`;
-  }
+  const hasBoth = reEmerges.length && urgencyChanges.length;
+  const title = hasBoth
+    ? `${reEmerges.length} task${reEmerges.length > 1 ? 's' : ''} re-emerged, ${urgencyChanges.length} urgency change${urgencyChanges.length > 1 ? 's' : ''}`
+    : reEmerges.length > 0
+      ? `${reEmerges.length} task${reEmerges.length > 1 ? 's' : ''} re-emerged`
+      : `${urgencyChanges.length} urgency change${urgencyChanges.length > 1 ? 's' : ''}`;
 
-  let body;
-  if (reEmerges.length && urgencyChanges.length) {
-    body = [...reEmerges.slice(0, 3), ...urgencyChanges.slice(0, 3)]
-      .map(c => c.type === 're-emerged' ? `🔄 ${c.text}` : `⚡ ${c.text}: ${c.from} → ${c.to}`)
-      .join('\n');
-  } else if (reEmerges.length) {
-    body = reEmerges.map(c => `🔄 ${c.text}`).join('\n');
-  } else {
-    body = urgencyChanges.map(c => `⚡ ${c.text}: ${c.from} → ${c.to}`).join('\n');
-  }
+  const body = (hasBoth ? [...reEmerges.slice(0, 3), ...urgencyChanges.slice(0, 3)]
+    : reEmerges.length > 0 ? reEmerges : urgencyChanges)
+    .map(c => c.type === 're-emerged' ? `🔄 ${c.text}` : `⚡ ${c.text}: ${c.from} → ${c.to}`)
+    .join('\n');
 
   new Notification(title, {
     body: body || 'Tasks updated',
@@ -407,20 +377,14 @@ function checkTasks() {
     }
   }
 
-  // Persist changed items to DB
-  if (changedIds.size > 0) {
+  // Persist changes to DB (changed items + purged trash in one transaction)
+  if (changedIds.size > 0 || purgedCount > 0) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     for (const id of changedIds) {
       const todo = active.find(t => t.id === id);
       if (todo) store.put(todo);
     }
-  }
-
-  // Purge trash older than 30 days (already spliced above — just delete from DB)
-  if (purgedCount > 0) {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
     deleted.forEach(todo => {
       if (todo.deletedAt && (now - todo.deletedAt) > 30 * 24 * 60 * 60 * 1000) {
         store.delete(todo.id);
@@ -618,19 +582,41 @@ function matchesFilters(todo, isActive) {
   return true;
 }
 
+const LIST_MAP = {
+  active: 'active-list',
+  completed: 'completed-list',
+  deleted: 'deleted-list',
+};
+
 /**
- * Adds a new todo element to the top of the active list (if it matches current filters).
- * @param {Object} todo - The todo to add
+ * Moves (or adds) a todo element to the target list.
+ * @param {Todo} todo
+ * @param {'active'|'completed'|'deleted'|null} fromView - Source list, or null to add new
+ * @param {'active'|'completed'|'deleted'} toView - Target list
  */
-function addTodoToDOM(todo) {
-  if (!matchesFilters(todo, true)) return;
-  const activeList = document.getElementById('active-list');
-  const item = buildItem(todo, 'active');
-  activeList.prepend(item);
-  // Remove empty state if present
-  const emptyMsg = activeList.querySelector('.empty-state');
-  if (emptyMsg) emptyMsg.remove();
+function moveTo(todo, fromView, toView) {
+  if (fromView) {
+    const oldEl = document.querySelector(`#${LIST_MAP[fromView]} li[data-id="${todo.id}"]`);
+    if (oldEl) oldEl.remove();
+  }
+
+  if (toView === 'active' && !matchesFilters(todo, true)) return;
+
+  const targetList = document.getElementById(LIST_MAP[toView]);
+  const item = buildItem(todo, toView);
+
+  if (toView === 'deleted') {
+    targetList.appendChild(item);
+  } else {
+    targetList.prepend(item);
+    if (toView === 'active') {
+      const emptyMsg = targetList.querySelector('.empty-state');
+      if (emptyMsg) emptyMsg.remove();
+    }
+  }
 }
+
+
 
 /**
  * Replaces an existing todo element with updated content.
@@ -658,27 +644,7 @@ function removeTodoFromDOM(id) {
   if (el) el.remove();
 }
 
-/**
- * Adds a deleted todo element to the trash list.
- * CSS handles hiding the deleted section when not in trash view.
- * @param {Object} todo - The deleted todo
- */
-function addTrashTodoToDOM(todo) {
-  const deletedList = document.getElementById('deleted-list');
-  deletedList.appendChild(buildItem(todo, 'deleted'));
-}
 
-/**
- * Moves a todo from deleted list to active list in the DOM.
- * If the restored todo doesn't match current filters, only removes from deleted.
- * @param {Object} todo - The restored todo
- */
-function restoreTodoToDOM(todo) {
-  removeTodoFromDOM(todo.id);
-  if (!matchesFilters(todo, true)) return;
-  const activeList = document.getElementById('active-list');
-  activeList.prepend(buildItem(todo, 'active'));
-}
 
 /**
  * Populates the three section lists with filtered items.
@@ -694,40 +660,13 @@ function render() {
   completedList.innerHTML = '';
   deletedList.innerHTML = '';
 
-  // Map status filter values to CSS classes
-  const classMap = { all: '', active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
-  todoList.className = classMap[statusFilter] || '';
+  todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
 
   const now = Date.now();
 
-  // Helper: apply importance + deadline filters to an array
-  function applyFilters(items, isActive) {
-    return items.filter(todo => {
-      if (importanceFilter !== 'all' && todo.importance !== importanceFilter) return false;
-      if (deadlineFilter !== 'all' && todo.deadline) {
-        if (deadlineFilter === 'overdue' && todo.deadline > now) return false;
-        if (deadlineFilter === 'today') {
-          const todayEnd = new Date();
-          todayEnd.setHours(23, 59, 59, 999);
-          if (todo.deadline > todayEnd.getTime()) return false;
-        }
-        if (deadlineFilter === 'week') {
-          const weekEnd = new Date();
-          weekEnd.setDate(weekEnd.getDate() + 7);
-          weekEnd.setHours(23, 59, 59, 999);
-          if (todo.deadline > weekEnd.getTime()) return false;
-        }
-      }
-      if (isActive && urgencyFilter !== 'all') {
-        if (calculateUrgency(todo.deadline, todo.duration) !== urgencyFilter) return false;
-      }
-      return true;
-    });
-  }
-
-  const activeItems = applyFilters(active, true);
-  const completedItems = applyFilters(completed, false);
-  const deletedItems = applyFilters(deleted, false);
+  const activeItems = active.filter(todo => matchesFilters(todo, true));
+  const completedItems = completed.filter(todo => matchesFilters(todo, false));
+  const deletedItems = deleted.filter(todo => matchesFilters(todo, false));
 
   activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
   completedItems.forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
@@ -765,53 +704,7 @@ function updateFooter() {
   }
 }
 
-/**
- * Moves a DOM element from active list to completed list (prepended).
- * Strips urgency badge (completed tasks don't show urgency).
- */
-function moveToCompleted(id) {
-  const el = document.querySelector(`#active-list li[data-id="${id}"]`);
-  if (!el) return;
-  el.classList.add('completed');
-  el.querySelectorAll('.badge.urgency-lax, .badge.urgency-balanced, .badge.urgency-stressy')
-    .forEach(badge => badge.remove());
 
-  const completedList = document.getElementById('completed-list');
-  completedList.prepend(el);
-  updateFooter();
-}
-
-/**
- * Moves a DOM element from completed list to active list (prepended).
- * Adds urgency badge back for active tasks.
- */
-function moveToActive(id) {
-  const el = document.querySelector(`#completed-list li[data-id="${id}"]`);
-  if (!el) return;
-  el.classList.remove('completed');
-  // Add urgency badge if task has a deadline
-  const meta = el.querySelector('.meta');
-  if (meta && el.querySelector('.badge.urgency') === null) {
-    const now = Date.now();
-    const deadline = Number(el.querySelector('.badge.deadline')?.dataset.deadline);
-    if (deadline) {
-      const urgency = calculateUrgency(deadline, null);
-      const emBadge = document.createElement('span');
-      emBadge.className = `badge urgency-${urgency}`;
-      emBadge.textContent = urgency.charAt(0).toUpperCase() + urgency.slice(1);
-      // Insert after importance badge
-      // HACK FIX
-      const impBadge = meta.querySelector('.badge.importance-low')
-        || meta.querySelector('.badge.importance-medium')
-        || meta.querySelector('.badge.importance-high');
-      if(impBadge)
-        impBadge.after(emBadge);
-    }
-  }
-  const activeList = document.getElementById('active-list');
-  activeList.prepend(el);
-  updateFooter();
-}
 
 /**
  * Lightweight timer update: only refreshes urgency badges and deadline countdowns.
@@ -820,11 +713,10 @@ function moveToActive(id) {
 function updateTimers() {
   const now = Date.now();
 
-  // Build ID→todo lookup from all three arrays
+  // Build ID→todo lookup from active and completed (deleted items use .trash-item, not .todo-item)
   const todoMap = new Map();
   active.forEach(todo => todoMap.set(todo.id, todo));
   completed.forEach(todo => todoMap.set(todo.id, todo));
-  deleted.forEach(todo => todoMap.set(todo.id, todo));
 
   const items = todoList.querySelectorAll('.todo-item');
 
@@ -883,8 +775,8 @@ function updateFilterButtons() {
 /** Resets the dialog to its default "add" state. */
 function resetDialog() {
   editingTodoId = null;
-  document.querySelector('.dialog-title').textContent = 'New Task';
-  document.querySelector('.dialog-submit').textContent = 'Add';
+  dialogTitle.textContent = 'New Task';
+  dialogSubmit.textContent = 'Add';
   dialogDelete.style.display = 'none';
   todoForm.reset();
   deadlineInput.value = '';
@@ -906,8 +798,8 @@ function openEditDialog(todo) {
   durationSelect.value = todo.duration || '5';
   deadlineInput.value = todo.deadline ? msToDatetimeLocal(todo.deadline) : '';
 
-  document.querySelector('.dialog-title').textContent = 'Edit Task';
-  document.querySelector('.dialog-submit').textContent = 'Save';
+  dialogTitle.textContent = 'Edit Task';
+  dialogSubmit.textContent = 'Save';
   dialogDelete.style.display = 'inline-block';
 
   dialog.showModal();
@@ -956,7 +848,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
   const id = await dbAdd(todo);
   todo.id = id;
   active.unshift(todo);
-  addTodoToDOM(todo);
+  moveTo(todo, null, 'active');
   updateFooter();
   updateFilterButtons();
 }
@@ -1009,7 +901,7 @@ async function toggleTodo(id) {
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
     completed.push(todo);
-    moveToCompleted(id);
+    moveTo(todo, 'active', 'completed');
   } else {
     // Decomplete: completed → active
     todo.completed = 0;
@@ -1018,7 +910,7 @@ async function toggleTodo(id) {
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
     active.push(todo);
-    moveToActive(id);
+    moveTo(todo, 'completed', 'active');
   }
 
   await dbPut(todo);
@@ -1050,8 +942,8 @@ async function deleteTodo(id) {
   deleted.push(todo);
 
   await dbPut(todo);
-  removeTodoFromDOM(id);
-  addTrashTodoToDOM(todo);
+  const fromView = activeIdx !== -1 ? 'active' : 'completed';
+  moveTo(todo, fromView, 'deleted');
   updateFooter();
   updateFilterButtons();
 }
@@ -1066,14 +958,19 @@ async function restoreTrash(id) {
   const todo = idx !== -1 ? deleted[idx] : null;
   if (!todo) return;
 
+  const wasCompleted = todo.completed === 1;
   todo.deleted = 0;
   todo.deletedAt = null;
 
   deleted.splice(idx, 1);
-  active.push(todo);
+  if (wasCompleted) {
+    completed.push(todo);
+  } else {
+    active.push(todo);
+  }
 
   await dbPut(todo);
-  restoreTodoToDOM(todo);
+  moveTo(todo, 'deleted', wasCompleted ? 'completed' : 'active');
   updateFooter();
   updateFilterButtons();
 }
@@ -1099,6 +996,9 @@ async function permanentDeleteTrash(id) {
 
 /** @type {'all' | 'active' | 'completed' | 'trash'} */
 let statusFilter = 'all';
+
+/** Maps status filter values to CSS view classes. */
+const VIEW_CLASS_MAP = { all: '', active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
 
 /** @type {'all' | 'high' | 'medium' | 'low'} */
 let importanceFilter = 'all';
@@ -1175,10 +1075,7 @@ filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.dataset.filter !== undefined) {
       statusFilter = btn.dataset.filter;
-      // Toggle section visibility via CSS class on todoList
-      // Map status filter values to CSS classes
-      const classMap = { all: '', active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
-      todoList.className = classMap[statusFilter] || '';
+      todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
       updateFooter();
       updateFilterButtons();
     }
@@ -1244,16 +1141,47 @@ if ('serviceWorker' in navigator) {
 // ── Init ───────────────────────────────────────────────────────
 
 /**
+ * Ensures the 'todos' object store exists. If missing (e.g. after manual DB deletion),
+ * closes the current connection, deletes the DB, and reopens fresh.
+ * @returns {Promise<void>}
+ */
+async function ensureStore() {
+  if (db.objectStoreNames.contains('todos')) return;
+  console.warn('todos store missing — recreating database');
+  db.close();
+  db = null;
+  return new Promise((resolve, reject) => {
+    const deleteReq = indexedDB.deleteDatabase('TodoAppDB');
+    deleteReq.onsuccess = () => {
+      // Now open fresh — onupgradeneeded will fire with version 1
+      const openReq = indexedDB.open('TodoAppDB', DB_VERSION);
+      openReq.onupgradeneeded = (event) => {
+        const database = event.target.result;
+        const store = database.createObjectStore('todos', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('deleted', 'deleted', { unique: false });
+        store.createIndex('completed', 'completed', { unique: false });
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+        store.createIndex('completedAt', 'completedAt', { unique: false });
+      };
+      openReq.onsuccess = () => {
+        db = openReq.result;
+        resolve();
+      };
+      openReq.onerror = () => reject(openReq.error);
+    };
+    deleteReq.onerror = () => reject(deleteReq.error);
+  });
+}
+
+/**
  * Initializes the application: opens DB, loads todos, starts background checkers, and renders.
  * @returns {Promise<void>}
  */
 async function init() {
   await openDB();
-  active = await dbGetActive();
-  completed = await dbGetCompleted();
-  deleted = await dbGetDeleted();
-  const all = [...active, ...completed, ...deleted];
-  all.forEach(todo => {
+  await ensureStore();
+  [active, completed, deleted] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+  active.forEach(todo => {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
   checkTasks();
