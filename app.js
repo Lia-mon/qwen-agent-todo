@@ -1446,10 +1446,9 @@ async function init() {
  */
 function applyTheme(theme) {
   localStorage.setItem('theme', theme);
-  const link = document.querySelector('link[rel="stylesheet"]');
-  if (link) link.href = theme === 'girly' ? 'girly.css' : 'styles.css';
-  const isGirly = theme === 'girly';
-  document.querySelector('meta[name="theme-color"]').content = isGirly ? '#ff69b4' : '#3498db';
+  const themeLink = document.getElementById('theme-stylesheet');
+  if (themeLink) themeLink.disabled = theme !== 'girly';
+  document.querySelector('meta[name="theme-color"]').content = theme === 'girly' ? '#ff69b4' : '#3498db';
   document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
 }
 
