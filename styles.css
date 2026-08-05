@@ -257,9 +257,32 @@ body {
 
 .filter-bar {
   display: flex;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: 8px;
+  padding-bottom: 8px;
   border-bottom: 2px solid #eee;
+  align-items: center;
+}
+
+.status-btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  background: #f0f0f0;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-btn:hover {
+  background: #e0e0e0;
+}
+
+.status-btn.active {
+  background: #3498db;
+  color: #fff;
 }
 
 .filter-toggle {
@@ -287,20 +310,22 @@ body {
 }
 
 .filters {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  width:100%;
-  padding-bottom: 16px;
+  padding-bottom: 12px;
+  margin-top: 8px;
+  border-bottom: 2px solid #eee;
   max-height: 0;
   overflow: hidden;
   opacity: 0;
-  transition: max-height 0.3s ease, opacity 0.2s ease;
+  transition: max-height 0.3s ease, opacity 0.2s ease, padding 0.3s ease;
 }
 
 .filters.expanded {
-  max-height: fit-content;
+  max-height: 300px;
   opacity: 1;
+  padding-bottom: 16px;
 }
 
 .filter-group {

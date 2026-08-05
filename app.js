@@ -562,7 +562,8 @@ function buildItem(todo, view) {
  */
 function matchesFilters(todo, isActive) {
   if (importanceFilter !== 'all' && todo.importance !== importanceFilter) return false;
-  if (deadlineFilter !== 'all' && todo.deadline) {
+  if (deadlineFilter !== 'all') {
+    if (!todo.deadline) return false;
     if (deadlineFilter === 'overdue' && todo.deadline > Date.now()) return false;
     if (deadlineFilter === 'today') {
       const todayEnd = new Date();
@@ -1069,23 +1070,26 @@ todoForm.addEventListener('submit', async e => {
   }
 });
 
-// Filter buttons: status filter toggles section visibility
+// Status buttons
+const statusBtns = document.querySelectorAll('.status-btn');
+statusBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    statusFilter = btn.dataset.filter;
+    todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
+    statusBtns.forEach(b => b.classList.toggle('active', b === btn));
+    updateFooter();
+    updateFilterButtons();
+  });
+});
+
+// Extra filter buttons
 const filterBtns = document.querySelectorAll('.filter-btn');
 filterBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    if (btn.dataset.filter !== undefined) {
-      statusFilter = btn.dataset.filter;
-      todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
-      updateFooter();
-      updateFilterButtons();
-    }
     if (btn.dataset.ifilter !== undefined) importanceFilter = btn.dataset.ifilter;
     if (btn.dataset.dfilter !== undefined) deadlineFilter = btn.dataset.dfilter;
     if (btn.dataset.ufilter !== undefined) urgencyFilter = btn.dataset.ufilter;
-    // Only full re-render for non-status filters
-    if (btn.dataset.ifilter !== undefined || btn.dataset.dfilter !== undefined || btn.dataset.ufilter !== undefined) {
-      render();
-    }
+    render();
   });
 });
 
