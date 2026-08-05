@@ -9,7 +9,7 @@
   --color-text: #d4c8b8;
   --color-text-secondary: #9a8e7e;
   --color-text-muted: #6b6056;
-  --color-text-faint: #4a4238;
+  --color-text-faint: #5a5048;
   --color-text-tertiary: #7a6e60;
 
   --color-primary: #8b0000;
@@ -48,7 +48,7 @@
   --badge-repeatable-bg: rgba(45, 90, 45, 0.25);
   --badge-repeatable-fg: #4a7a4a;
   --badge-deadline-bg: rgba(255, 255, 255, 0.03);
-  --badge-deadline-fg: #5a5048;
+  --badge-deadline-fg: #6b6056;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 0px;
@@ -241,7 +241,7 @@ body::before {
 }
 
 .settings-btn::before {
-  content: '☠';
+  content: '⚜️';
 }
 
 .settings-btn:hover {

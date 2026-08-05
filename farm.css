@@ -9,8 +9,8 @@
   --color-text: #4a3f2f;
   --color-text-secondary: #6b5e4a;
   --color-text-muted: #8a7e6a;
-  --color-text-faint: #b0a690;
-  --color-text-tertiary: #9a8e78;
+  --color-text-faint: #9a8e78;
+  --color-text-tertiary: #7a6e58;
 
   --color-primary: #6b8e23;
   --color-primary-hover: #556b2f;
@@ -24,8 +24,8 @@
   --color-danger-hover: #962d22;
   --color-danger-light: #fdecea;
 
-  --color-success: #27ae60;
-  --color-success-hover: #1e8449;
+  --color-success: #156030;
+  --color-success-hover: #0e4a22;
 
   --color-warning: #d4a017;
   --color-warning-light: #fef5e7;
@@ -48,7 +48,7 @@
   --badge-repeatable-bg: #eafaf1;
   --badge-repeatable-fg: #27ae60;
   --badge-deadline-bg: #f0e8d8;
-  --badge-deadline-fg: #8a7e6a;
+  --badge-deadline-fg: #6e6250;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 6px;

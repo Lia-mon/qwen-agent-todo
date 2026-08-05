@@ -11,10 +11,10 @@
   --color-bg-fixed: fixed;
   --color-surface: linear-gradient(145deg, #ffffff 0%, #fff5f9 100%);
   --color-text: #5a3d5c;
-  --color-text-secondary: #b07090;
-  --color-text-muted: #c090a8;
-  --color-text-faint: #c090a8;
-  --color-text-tertiary: #c090a8;
+  --color-text-secondary: #8a5070;
+  --color-text-muted: #9a6a80;
+  --color-text-faint: #a07080;
+  --color-text-tertiary: #906070;
 
   --color-primary: #d63384;
   --color-primary-hover: #c21e6b;
@@ -24,35 +24,35 @@
   --color-border-light: rgba(255, 182, 193, 0.4);
   --color-border-lighter: rgba(255, 182, 193, 0.3);
 
-  --color-danger: #ff6b9d;
-  --color-danger-hover: #ff4d8a;
+  --color-danger: #8a1040;
+  --color-danger-hover: #701038;
   --color-danger-light: #ffe4e9;
 
-  --color-success: #90ee90;
-  --color-success-hover: #98fb98;
+  --color-success: #2a7a4a;
+  --color-success-hover: #1e6a3a;
 
   --color-warning: #f39c12;
   --color-warning-light: #fff5e6;
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: linear-gradient(145deg, #ffe4e9, #ffd6e0);
-  --badge-importance-high-fg: #ff6b9d;
+  --badge-importance-high-fg: #8a1040;
   --badge-importance-medium-bg: linear-gradient(145deg, #fff5e6, #ffe4c4);
   --badge-importance-medium-fg: #f39c12;
   --badge-importance-low-bg: linear-gradient(145deg, #e8f4fd, #d6e9f8);
-  --badge-importance-low-fg: #5dade2;
+  --badge-importance-low-fg: #3a7ab5;
 
   --badge-urgency-stressy-bg: linear-gradient(145deg, #ffe4e9, #ffd6e0);
   --badge-urgency-stressy-fg: #e74c3c;
   --badge-urgency-balanced-bg: linear-gradient(145deg, #fff5e6, #ffe4c4);
   --badge-urgency-balanced-fg: #d68910;
   --badge-urgency-lax-bg: linear-gradient(145deg, #e8f4fd, #d6e9f8);
-  --badge-urgency-lax-fg: #2e86c1;
+  --badge-urgency-lax-fg: #1e6a9a;
 
   --badge-repeatable-bg: linear-gradient(145deg, #eaf6ff, #d6e9f8);
   --badge-repeatable-fg: #27ae60;
   --badge-deadline-bg: linear-gradient(145deg, #f0f0f0, #e0e0e0);
-  --badge-deadline-fg: #666;
+  --badge-deadline-fg: #7a5060;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 10px;
@@ -619,7 +619,6 @@ body::before {
 
 .restore-btn {
   background: linear-gradient(145deg, var(--color-success), var(--color-success-hover));
-  color: #2d5a2d;
   border: 2px solid var(--color-success);
 }
 

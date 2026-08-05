@@ -270,7 +270,15 @@ body {
 
 .theme-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--gap-sm);
+  width:75%;
+}
+
+.theme-btn {
+  flex: 1 1 auto;
+  min-width: 80px;
+  text-align: center;
 }
 
 .theme-btn {
