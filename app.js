@@ -800,14 +800,13 @@ function updateFooter(completedTotal, completedPages) {
  */
 function renderSettingsTrash() {
   settingsDeletedList.innerHTML = '';
-  const deletedItems = deleted.filter(todo => matchesFilters(todo, false));
-  const trashTotal = deletedItems.length;
+  const trashTotal = deleted.length;
   const trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
 
   trashPage = Math.min(trashPage, trashPages);
 
   const start = (trashPage - 1) * PAGE_SIZE;
-  deletedItems.slice(start, start + PAGE_SIZE)
+  deleted.slice(start, start + PAGE_SIZE)
     .forEach(todo => settingsDeletedList.appendChild(buildItem(todo, 'deleted')));
 
   if (trashTotal === 0) {
@@ -1117,12 +1116,62 @@ async function permanentDeleteTrash(id) {
   if (idx === -1) return;
   deleted.splice(idx, 1);
   await dbDelete(id);
-  removeTodoFromDOM(id);
-  const trashTotal = deleted.filter(t => matchesFilters(t, false)).length;
-  trashPage = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
+
+  // Smoothly animate the item out in the settings trash list, pulling
+  // the first item from the next page down to fill the gap.
+  const trashItem = settingsDeletedList.querySelector(`li[data-id="${id}"]`);
+  if (trashItem) {
+    const listItems = Array.from(settingsDeletedList.querySelectorAll('li:not(.empty-state)'));
+    const localIdx = listItems.findIndex(li => li === trashItem);
+
+    // Calculate which item to promote from the next page
+    // Would be top of next page but delete 1 that's why minus 1
+    const start = (trashPage) * PAGE_SIZE - 1;
+    let replacementEl = null;
+    if (start < deleted.length) {
+      replacementEl = buildItem(deleted[start], 'deleted');
+    }
+
+    if (replacementEl) {
+      settingsDeletedList.appendChild(replacementEl);
+    }
+
+    // Animate the deleted item shrinking to zero height
+    // trashItem.style.height = trashItem.offsetHeight + 'px';
+    trashItem.classList.add('moving-task');
+    trashItem.innerHTML = '';
+    requestAnimationFrame(() => {
+      trashItem.style.height = '0';
+    });
+
+    await new Promise(resolve => {
+      trashItem.addEventListener('transitionend', resolve, { once: true });
+      // Fallback in case transitionend doesn't fire
+      setTimeout(resolve, 250);
+    });
+
+    // Remove old element and append replacement in the same frame
+    trashItem.remove();
+  }
+
+  // Clamp trashPage to the new page count
+  trashPage = Math.min(trashPage, Math.max(1, Math.ceil(deleted.length / PAGE_SIZE)));
   updateFooter();
   updateFilterButtons();
-  if (activeSettingsTab === 'trash') renderSettingsTrash();
+
+  // Always update the trash list UI — we're always in the trash context
+  const trashPages = Math.max(1, Math.ceil(deleted.length / PAGE_SIZE));
+  if (trashPages <= 1) {
+    settingsPagination.innerHTML = '';
+  } else {
+    renderPagination(deleted.length, trashPages, trashPage, 'trash');
+  }
+  if (deleted.length === 0) {
+    const emptyMsg = document.createElement('li');
+    emptyMsg.className = 'empty-state';
+    emptyMsg.textContent = 'Trash is empty.';
+    settingsDeletedList.appendChild(emptyMsg);
+  }
 }
 
 // ── Filter state ───────────────────────────────────────────────
@@ -1277,6 +1326,23 @@ todoList.addEventListener('click', (e) => {
       const editTodo = active.find(t => t.id === id) || completed.find(t => t.id === id);
       if (editTodo) openEditDialog(editTodo);
       break;
+    case 'restore':
+      restoreTrash(id);
+      break;
+    case 'perm-delete':
+      permanentDeleteTrash(id);
+      break;
+  }
+});
+
+// Event delegation for settings trash list
+settingsDeletedList.addEventListener('click', (e) => {
+  const actionEl = e.target.closest('[data-action]');
+  if (!actionEl) return;
+  const action = actionEl.dataset.action;
+  const id = Number(actionEl.dataset.id);
+
+  switch (action) {
     case 'restore':
       restoreTrash(id);
       break;
@@ -1470,10 +1536,10 @@ async function init() {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
   checkTasks();
-  setInterval(() => {
-    checkTasks();
-    updateTimers();
-  }, 5 * 60 * 1000); // Update repeat tasks & timers every 5 minutes
+  // setInterval(() => {
+  //   checkTasks();
+  //   updateTimers();
+  // }, 5 * 60 * 1000); // Update repeat tasks & timers every 5 minutes (disabled for now)
   render();
   // Setup settings panel event listeners
   document.getElementById('export-data')?.addEventListener('click', exportData);

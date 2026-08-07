@@ -920,6 +920,16 @@ body {
   font-style: italic;
 }
 
+/* ── Moving Task Animation ──────────────────────────────────── */
+
+.moving-task {
+  transition: height var(--transition-base) ease;
+  transition: padding var(--transition-base) ease;
+  height:0px;
+  padding:0px;
+  overflow: hidden;
+}
+
 /* ── Footer ─────────────────────────────────────────────────── */
 
 .footer {
