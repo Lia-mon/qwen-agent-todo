@@ -101,14 +101,8 @@ let db = null;
 /** @type {Todo[]} */
 let active = [];
 
-/** @type {Boolean} */
-let activeJumbled = false;
-
 /** @type {Todo[]} */
 let completed = [];
-
-/** @type {Boolean} */
-let completedJumbled = false;
 
 /** @type {Todo[]} */
 let deleted = [];
@@ -135,6 +129,36 @@ const DB_GET_ACTIVE = 1;
 const DB_GET_COMPLETED = 2;
 const DB_GET_DELETED = 4;
 
+/**
+ * Inserts `item` into a sorted array at the correct position using binary search.
+ * Mutates the array in place.
+ * @template T
+ * @param {T[]} arr - A sorted array
+ * @param {T} item - Item to insert
+ * @param {(a: T, b: T) => number} compare - Compare function returning <0 if a < b, >0 if a > b
+ */
+function binaryInsert(arr, item, compare) {
+  let lo = 0, hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (compare(arr[mid], item) < 0) lo = mid + 1;
+    else hi = mid;
+  }
+  arr.splice(lo, 0, item);
+}
+
+
+/**
+ * Creates the 'todos' object store and its indexes on the given database.
+ * @param {IDBDatabase} database
+ */
+function createStore(database) {
+  const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+  store.createIndex('deleted', 'deleted', { unique: false });
+  store.createIndex('completed', 'completed', { unique: false });
+  store.createIndex('createdAt', 'createdAt', { unique: false });
+  store.createIndex('completedAt', 'completedAt', { unique: false });
+}
 
 /**
  * Opens the IndexedDB database with a single 'todos' store and indexes.
@@ -145,12 +169,7 @@ function openDB() {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
-      const database = event.target.result;
-      const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-      store.createIndex('deleted', 'deleted', { unique: false });
-      store.createIndex('completed', 'completed', { unique: false });
-      store.createIndex('createdAt', 'createdAt', { unique: false });
-      store.createIndex('completedAt', 'completedAt', { unique: false });
+      createStore(event.target.result);
     };
 
     request.onsuccess = () => {
@@ -273,6 +292,7 @@ function formatRemaining(ms) {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
+  if (days >= 7) return `${Math.floor(days / 7)}w ${days % 7}d`;
   if (days > 0) return `${days}d ${hours % 24}h`;
   if (hours > 0) return `${hours}h ${minutes % 60}m`;
   if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
@@ -458,7 +478,6 @@ function buildItem(todo, view) {
     textEl.className = 'text';
     textEl.textContent = todo.text;
     textEl.style.textDecoration = 'line-through';
-    textEl.style.color = '#aaa';
 
     const meta = document.createElement('div');
     meta.className = 'meta';
@@ -476,28 +495,7 @@ function buildItem(todo, view) {
     }
 
     textArea.append(textEl, meta);
-
-    const timestamps = document.createElement('div');
-    timestamps.className = 'timestamps';
-
-    const createdSpan = document.createElement('span');
-    createdSpan.className = 'timestamp created';
-    createdSpan.textContent = 'created: ' + formatTimestamp(todo.createdAt);
-    timestamps.appendChild(createdSpan);
-
-    if (todo.completedAt) {
-      const completedSpan = document.createElement('span');
-      completedSpan.className = 'timestamp completed';
-      completedSpan.textContent = `completed: ${formatTimestamp(todo.completedAt)}`;
-      timestamps.appendChild(completedSpan);
-    }
-
-    const deletedSpan = document.createElement('span');
-    deletedSpan.className = 'timestamp deleted';
-    deletedSpan.textContent = 'deleted: ' + formatTimestamp(todo.deletedAt);
-    timestamps.appendChild(deletedSpan);
-
-    textArea.appendChild(timestamps);
+    textArea.appendChild(buildTimestamps(todo));
 
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'trash-actions';
@@ -564,27 +562,43 @@ function buildItem(todo, view) {
     }
 
     textArea.append(textEl, meta);
-
-    const timestamps = document.createElement('div');
-    timestamps.className = 'timestamps';
-
-    const createdSpan = document.createElement('span');
-    createdSpan.className = 'timestamp created';
-    createdSpan.textContent = 'created: ' + formatTimestamp(todo.createdAt);
-    timestamps.appendChild(createdSpan);
-
-    if (todo.completedAt) {
-      const completedSpan = document.createElement('span');
-      completedSpan.className = 'timestamp completed';
-      completedSpan.textContent = `completed: ${formatTimestamp(todo.completedAt)}`;
-      timestamps.appendChild(completedSpan);
-    }
-
-    textArea.appendChild(timestamps);
+    textArea.appendChild(buildTimestamps(todo));
     li.append(checkbox, textArea);
   }
 
   return li;
+}
+
+/**
+ * Builds a timestamps div for a todo item.
+ * Shared between active/completed and deleted branches of buildItem.
+ * @param {Object} todo
+ * @returns {HTMLElement}
+ */
+function buildTimestamps(todo) {
+  const timestamps = document.createElement('div');
+  timestamps.className = 'timestamps';
+
+  const createdSpan = document.createElement('span');
+  createdSpan.className = 'timestamp created';
+  createdSpan.textContent = 'created: ' + formatTimestamp(todo.createdAt);
+  timestamps.appendChild(createdSpan);
+
+  if (todo.completedAt) {
+    const completedSpan = document.createElement('span');
+    completedSpan.className = 'timestamp completed';
+    completedSpan.textContent = `completed: ${formatTimestamp(todo.completedAt)}`;
+    timestamps.appendChild(completedSpan);
+  }
+
+  if (todo.deletedAt) {
+    const deletedSpan = document.createElement('span');
+    deletedSpan.className = 'timestamp deleted';
+    deletedSpan.textContent = 'deleted: ' + formatTimestamp(todo.deletedAt);
+    timestamps.appendChild(deletedSpan);
+  }
+
+  return timestamps;
 }
 
 /**
@@ -635,27 +649,15 @@ function updateTodoInDOM(todo) {
 }
 
 /**
- * Removes a todo element from its list.
+ * Removes a todo element from its list. Fire-and-forget — the
+ * animation runs asynchronously and the element is cleaned up
+ * when the transition completes (or after a 250ms fallback).
  * @param {number} id - Todo ID
  */
-async function removeTodoFromDOM(id) {
+function removeTodoFromDOM(id) {
   const el = document.querySelector(`li[data-id="${id}"]`);
   if (!el) return;
-
-  // el.style.height = el.offsetHeight + 'px';
-  el.classList.add('moving-task');
-  el.innerHTML = '';
-  requestAnimationFrame(() => {
-    el.style.height = '0';
-    el.style.padding = '0';
-    el.style.margin = '0';
-  });
-  await new Promise(resolve => {
-    el.addEventListener('transitionend', resolve, { once: true });
-    setTimeout(resolve, 250);
-  });
   el.remove();
-
 }
 
 
@@ -673,10 +675,7 @@ function render() {
   todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
 
   if (statusFilter === 'active') {
-    if (activeJumbled){
-      active.sort((t1, t2) => t2.createdAt - t1.createdAt );
-      activeJumbled = false;
-    }
+    active.sort((t1, t2) => t2.createdAt - t1.createdAt);
     const activeItems = active.filter(todo => matchesFilters(todo, true));
     activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
 
@@ -689,10 +688,6 @@ function render() {
 
     updateFooter();
   } else if (statusFilter === 'completed') {
-    if (completedJumbled){
-      completed.sort((t1, t2) => t2.createdAt - t1.createdAt );
-      completedJumbled = false;
-    }
     const completedItems = completed.filter(todo => matchesFilters(todo, false));
     const completedTotal = completedItems.length;
     const completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
@@ -968,7 +963,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
   todo.id = id;
   active.unshift(todo);
   const item = buildItem(todo, 'active');
-  activeListEl.appendChild(item);
+  activeListEl.prepend(item);
   const emptyMsg = activeListEl.querySelector('.empty-state');
   if (emptyMsg) emptyMsg.remove();
   updateFooter();
@@ -1023,9 +1018,8 @@ async function toggleTodo(id) {
     }
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
-    completed.push(todo);
-    completedJumbled = true;
-    await removeTodoFromDOM(todo.id);
+    binaryInsert(completed, todo, (a, b) => b.completedAt - a.completedAt);
+    removeTodoFromDOM(todo.id);
   } else {
     // Decomplete: completed → active
     todo.completed = 0;
@@ -1034,8 +1028,7 @@ async function toggleTodo(id) {
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
     active.push(todo);
-    activeJumbled = true;
-    await removeTodoFromDOM(todo.id);
+    removeTodoFromDOM(todo.id);
   }
 
   await dbPut(todo);
@@ -1068,8 +1061,8 @@ async function deleteTodo(id) {
   }
   deleted.push(todo);
 
+  removeTodoFromDOM(todo.id);
   await dbPut(todo);
-  await removeTodoFromDOM(todo.id);
   trashPage = 1;
   updateFooter();
   updateFilterButtons();
@@ -1092,13 +1085,13 @@ async function restoreTrash(id) {
 
   deleted.splice(idx, 1);
   if (wasCompleted) {
-    completed.push(todo);
+    binaryInsert(completed, todo, (a, b) => b.completedAt - a.completedAt);
   } else {
     active.push(todo);
   }
 
+  removeTodoFromDOM(todo.id);
   await dbPut(todo);
-  await removeTodoFromDOM(todo.id);
   trashPage = 1;
   updateFooter();
   updateFilterButtons();
@@ -1118,13 +1111,9 @@ async function permanentDeleteTrash(id) {
   deleted.splice(idx, 1);
   await dbDelete(id);
 
-  // Smoothly animate the item out in the settings trash list, pulling
-  // the first item from the next page down to fill the gap.
+  // Pull the first item from the next page down to fill the gap.
   const trashItem = settingsDeletedList.querySelector(`li[data-id="${id}"]`);
   if (trashItem) {
-    const listItems = Array.from(settingsDeletedList.querySelectorAll('li:not(.empty-state)'));
-    const localIdx = listItems.findIndex(li => li === trashItem);
-
     // Calculate which item to promote from the next page
     // Would be top of next page but delete 1 that's why minus 1
     const start = (trashPage) * PAGE_SIZE - 1;
@@ -1137,21 +1126,6 @@ async function permanentDeleteTrash(id) {
       settingsDeletedList.appendChild(replacementEl);
     }
 
-    // Animate the deleted item shrinking to zero height
-    // trashItem.style.height = trashItem.offsetHeight + 'px';
-    trashItem.classList.add('moving-task');
-    trashItem.innerHTML = '';
-    requestAnimationFrame(() => {
-      trashItem.style.height = '0';
-    });
-
-    await new Promise(resolve => {
-      trashItem.addEventListener('transitionend', resolve, { once: true });
-      // Fallback in case transitionend doesn't fire
-      setTimeout(resolve, 250);
-    });
-
-    // Remove old element and append replacement in the same frame
     trashItem.remove();
   }
 
@@ -1221,8 +1195,7 @@ todoForm.addEventListener('submit', async e => {
   const text = todoInput.value.trim();
   if (!text) return;
 
-  const submitBtn = document.querySelector('.dialog-submit');
-  submitBtn.disabled = true;
+  dialogSubmit.disabled = true;
 
   try {
     if (editingTodoId !== null) {
@@ -1248,7 +1221,7 @@ todoForm.addEventListener('submit', async e => {
       dialog.close();
     }
   } finally {
-    submitBtn.disabled = false;
+    dialogSubmit.disabled = false;
   }
 });
 
@@ -1406,13 +1379,13 @@ async function importData(e) {
       // Write imported tasks (strip IDs so auto-increment assigns fresh ones)
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      let count = 0;
+      const importCounts = [];
       for (const arr of [data.active, data.completed, data.deleted]) {
         if (Array.isArray(arr)) {
           for (const todo of arr) {
             const { id, ...todoWithoutId } = todo;
             const req = store.add(todoWithoutId);
-            req.onsuccess = () => count++;
+            importCounts.push(req);
             req.onerror = () => console.warn('Failed to import todo:', req.error);
           }
         }
@@ -1421,7 +1394,9 @@ async function importData(e) {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-      console.log(`Imported ${count} todos`);
+      const failedCount = importCounts.filter(r => r.error).length;
+      const totalCount = data.active?.length + data.completed?.length + data.deleted?.length || 0;
+      console.log(`Imported ${totalCount - failedCount} todos`);
 
       // Refresh JS state
       const [activeArr, completedArr, deletedArr] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
@@ -1441,7 +1416,6 @@ async function importData(e) {
 
 async function clearAllData() {
   if (!confirm('Are you sure you want to clear ALL data? This cannot be undone.')) return;
-  if (!confirm('This will permanently delete all tasks. Continue?')) return;
   active = [];
   completed = [];
   deleted = [];
@@ -1508,12 +1482,7 @@ async function ensureStore() {
       // Now open fresh — onupgradeneeded will fire with version 1
       const openReq = indexedDB.open('TodoAppDB', DB_VERSION);
       openReq.onupgradeneeded = (event) => {
-        const database = event.target.result;
-        const store = database.createObjectStore('todos', { keyPath: 'id', autoIncrement: true });
-        store.createIndex('deleted', 'deleted', { unique: false });
-        store.createIndex('completed', 'completed', { unique: false });
-        store.createIndex('createdAt', 'createdAt', { unique: false });
-        store.createIndex('completedAt', 'completedAt', { unique: false });
+        createStore(event.target.result);
       };
       openReq.onsuccess = () => {
         db = openReq.result;
@@ -1533,8 +1502,8 @@ async function init() {
   await openDB();
   await ensureStore();
   [active, completed, deleted] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
-  active.reverse();
-  completed.reverse();
+  active.sort((a, b) => b.createdAt - a.createdAt);
+  completed.sort((t1,t2)=>t2.completedAt - t1.completedAt);
   active.forEach(todo => {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
@@ -1553,7 +1522,7 @@ async function init() {
   document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
 
   // Theme buttons
-  const savedTheme = (localStorage.getItem('theme') === 'classic') ? 'styles' : (localStorage.getItem('theme') || 'styles');
+  const savedTheme = localStorage.getItem('theme') || 'styles';
   applyTheme(savedTheme);
   document.querySelectorAll('.theme-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1568,10 +1537,8 @@ async function init() {
  */
 function applyTheme(theme) {
   localStorage.setItem('theme', theme);
-  if (theme === 'styles') {
-    document.querySelectorAll('[id^="theme-"]').forEach(link => link.disabled = true);
-  } else {
-    document.querySelectorAll('[id^="theme-"]').forEach(link => link.disabled = true);
+  document.querySelectorAll('[id^="theme-"]').forEach(link => link.disabled = true);
+  if (theme !== 'styles') {
     const themeLink = document.getElementById(`theme-${theme}`);
     if (themeLink) themeLink.disabled = false;
   }

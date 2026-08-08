@@ -163,17 +163,7 @@ Both `#todo-list` and `#settings-deleted-list` use event delegation via `data-ac
 - `moveTo()` — removes element from source list, appends to target list (no full re-render)
 - `updateTodoInDOM()` — finds element by `data-id`, replaces with updated version
 - `removeTodoFromDOM()` — removes element by `data-id`
-- `permanentDeleteTrash()` — animates item shrink, swaps in next-page item
-
-### Trash Animation (it's what I asked so it's a chunk)
-
-When permanently deleting from the settings trash:
-1. Find the element in `settingsDeletedList`
-2. Calculate which item to promote from the next page
-3. Build replacement element and append it
-4. Apply `.moving-task` class (height + padding transition to 0)
-5. Wait for `transitionend` (with 250ms fallback)
-6. Remove old element
+- `permanentDeleteTrash()` — swaps in next-page item from the trash list
 
 ### Soft-Delete Pattern
 

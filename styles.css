@@ -202,6 +202,11 @@ body {
   background: var(--color-border-lighter);
 }
 
+.settings-close:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .settings-tabs {
   display: flex;
   gap: var(--gap-xs);
@@ -230,6 +235,11 @@ body {
 .settings-tab.active {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
+}
+
+.settings-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
 
 .settings-content {
@@ -300,6 +310,11 @@ body {
   color: #fff;
 }
 
+.settings-action-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ── Theme Buttons ──────────────────────────────────────────── */
 
 .theme-buttons {
@@ -337,6 +352,11 @@ body {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
+}
+
+.theme-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* ── Toggle Switch ──────────────────────────────────────────── */
@@ -409,6 +429,11 @@ body {
 
 .settings-btn:hover {
   background: #e0e0e0;
+}
+
+.settings-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* ── Responsive: full width on small screens ────────────────── */
@@ -632,6 +657,11 @@ body {
   transform: scale(1.05);
 }
 
+.add-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 /* ── Filters ────────────────────────────────────────────────── */
 
 .filter-bar {
@@ -662,6 +692,11 @@ body {
 .status-btn.active {
   background: var(--color-primary);
   color: #fff;
+}
+
+.status-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .filter-toggle {
@@ -747,6 +782,11 @@ body {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: #fff;
+}
+
+.filter-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* ── Task List ──────────────────────────────────────────────── */
@@ -920,16 +960,6 @@ body {
   font-style: italic;
 }
 
-/* ── Moving Task Animation ──────────────────────────────────── */
-
-.moving-task {
-  transition: height var(--transition-base) ease , padding var(--transition-base) ease , margin var(--transition-base) ease;
-  height: 0;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-}
-
 /* ── Footer ─────────────────────────────────────────────────── */
 
 .footer {
@@ -1028,6 +1058,11 @@ body {
 .page-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.page-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .page-info {

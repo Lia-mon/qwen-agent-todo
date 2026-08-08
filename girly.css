@@ -252,30 +252,11 @@ body::before {
 }
 
 .toggle-slider {
-  background: linear-gradient(145deg, #ffe4e9, #ffd6e0);
-  border-radius: 24px;
-  border: 2px solid var(--color-border);
-  transition: all var(--transition-base);
-}
-
-.toggle-slider::before {
-  content: '🌸';
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  font-size: 0.65rem;
-  box-shadow: 0 2px 6px rgba(255, 182, 193, 0.3);
+  background: var(--color-border);
 }
 
 .toggle input:checked + .toggle-slider {
-  background: linear-gradient(145deg, var(--color-primary), #e75480);
-  border-color: var(--color-primary);
-}
-
-.toggle input:checked + .toggle-slider::before {
-  content: '✨';
-  transform: translateX(20px);
+  background: var(--color-primary);
 }
 
 /* ── Settings Button ────────────────────────────────────────── */
