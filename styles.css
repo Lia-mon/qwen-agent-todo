@@ -212,6 +212,7 @@ body {
   gap: var(--gap-xs);
   padding: 12px 0;
   border-bottom: 2px solid var(--color-border-light);
+  flex-wrap:wrap;
 }
 
 .settings-tab {
@@ -908,6 +909,7 @@ body {
   gap: var(--gap-sm);
   margin-left: auto;
   flex-shrink: 0;
+  flex-direction: column;
 }
 
 .trash-btn {
