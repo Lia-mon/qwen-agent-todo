@@ -45,6 +45,9 @@ const todoList = document.getElementById('todo-list');
 if (!todoList) console.error('todoList is null!');
 
 /** @type {HTMLElement} */
+const activeListEl = document.getElementById('active-list');
+
+/** @type {HTMLElement} */
 const footer = document.getElementById('footer');
 
 /** @type {HTMLElement} */
@@ -608,42 +611,6 @@ function matchesFilters(todo, isActive) {
   return true;
 }
 
-const LIST_MAP = {
-  active: 'active-list',
-  completed: 'completed-list',
-  deleted: 'settings-deleted-list',
-};
-
-/**
- * Moves (or adds) a todo element to the target list.
- * @param {Todo} todo
- * @param {'active'|'completed'|'deleted'|null} fromView - Source list, or null to add new
- * @param {'active'|'completed'|'deleted'} toView - Target list
- */
-function moveTo(todo, fromView, toView) {
-  if (fromView) {
-    const oldEl = document.querySelector(`#${LIST_MAP[fromView]} li[data-id="${todo.id}"]`);
-    if (oldEl) oldEl.remove();
-  }
-
-  if (toView === 'active' && !matchesFilters(todo, true)) return;
-
-  const targetList = document.getElementById(LIST_MAP[toView]);
-  const item = buildItem(todo, toView);
-
-  if (toView === 'deleted') {
-    targetList.appendChild(item);
-  } else {
-    targetList.prepend(item);
-    if (toView === 'active') {
-      const emptyMsg = targetList.querySelector('.empty-state');
-      if (emptyMsg) emptyMsg.remove();
-    }
-  }
-}
-
-
-
 /**
  * Replaces an existing todo element with updated content.
  * If the updated todo no longer matches filters, removes it instead.
@@ -665,9 +632,25 @@ function updateTodoInDOM(todo) {
  * Removes a todo element from its list.
  * @param {number} id - Todo ID
  */
-function removeTodoFromDOM(id) {
+async function removeTodoFromDOM(id) {
   const el = document.querySelector(`li[data-id="${id}"]`);
-  if (el) el.remove();
+  if (!el) return;
+
+  // el.style.height = el.offsetHeight + 'px';
+  el.classList.add('moving-task');
+  el.innerHTML = '';
+  requestAnimationFrame(() => {
+    el.style.height = '0';
+    el.style.padding = '0';
+    el.style.margin = '0';
+  });
+  el.addEventListener('transitionend', () => console.log('transitionend fired'), { once: true });
+  await new Promise(resolve => {
+    el.addEventListener('transitionend', resolve, { once: true });
+    setTimeout(resolve, 250);
+  });
+  el.remove();
+
 }
 
 
@@ -680,41 +663,43 @@ function removeTodoFromDOM(id) {
 function render() {
   const activeList = document.getElementById('active-list');
   const completedList = document.getElementById('completed-list');
-
   activeList.innerHTML = '';
   completedList.innerHTML = '';
-
   todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
 
-  const now = Date.now();
+  if (statusFilter === 'active') {
+    const activeItems = active.filter(todo => matchesFilters(todo, true));
+    activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
 
-  const activeItems = active.filter(todo => matchesFilters(todo, true));
-  const completedItems = completed.filter(todo => matchesFilters(todo, false));
+    if (activeItems.length === 0) {
+      const emptyMsg = document.createElement('li');
+      emptyMsg.className = 'empty-state';
+      emptyMsg.textContent = 'No tasks yet. Add one!';
+      activeList.appendChild(emptyMsg);
+    }
 
-  activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
+    updateFooter();
+  } else if (statusFilter === 'completed') {
 
-  // Paginate completed list
-  const completedTotal = completedItems.length;
-  const completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
+    const completedItems = completed.filter(todo => matchesFilters(todo, false));
+    const completedTotal = completedItems.length;
+    const completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
 
-  // Clamp pages
-  completedPage = Math.min(completedPage, completedPages);
+    completedPage = Math.min(completedPage, completedPages);
 
-  const completedStart = (completedPage - 1) * PAGE_SIZE;
+    const completedStart = (completedPage - 1) * PAGE_SIZE;
+    completedItems.slice(completedStart, completedStart + PAGE_SIZE)
+      .forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
 
-  completedItems.slice(completedStart, completedStart + PAGE_SIZE)
-    .forEach(todo => completedList.appendChild(buildItem(todo, 'completed')));
+    if (completedItems.length === 0) {
+      const emptyMsg = document.createElement('li');
+      emptyMsg.className = 'empty-state';
+      emptyMsg.textContent = 'No completed tasks.';
+      completedList.appendChild(emptyMsg);
+    }
 
-  // Show empty state when the current view has no items
-  const hasItems = activeItems.length || completedItems.length;
-  if (!hasItems) {
-    const emptyMsg = document.createElement('li');
-    emptyMsg.className = 'empty-state';
-    emptyMsg.textContent = 'No tasks yet. Add one!';
-    activeList.appendChild(emptyMsg);
+    updateFooter(completedTotal, completedPages);
   }
-
-  updateFooter(completedTotal, completedPages);
   updateFilterButtons();
   if (activeSettingsTab === 'trash') renderSettingsTrash();
 }
@@ -970,7 +955,10 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
   const id = await dbAdd(todo);
   todo.id = id;
   active.unshift(todo);
-  moveTo(todo, null, 'active');
+  const item = buildItem(todo, 'active');
+  activeListEl.appendChild(item);
+  const emptyMsg = activeListEl.querySelector('.empty-state');
+  if (emptyMsg) emptyMsg.remove();
   updateFooter();
   updateFilterButtons();
 }
@@ -1024,7 +1012,7 @@ async function toggleTodo(id) {
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
     completed.push(todo);
-    moveTo(todo, 'active', 'completed');
+    await removeTodoFromDOM(todo.id);
   } else {
     // Decomplete: completed → active
     todo.completed = 0;
@@ -1033,7 +1021,7 @@ async function toggleTodo(id) {
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
     active.push(todo);
-    moveTo(todo, 'completed', 'active');
+    await removeTodoFromDOM(todo.id);
   }
 
   await dbPut(todo);
@@ -1067,8 +1055,7 @@ async function deleteTodo(id) {
   deleted.push(todo);
 
   await dbPut(todo);
-  const fromView = activeIdx !== -1 ? 'active' : 'completed';
-  moveTo(todo, fromView, 'deleted');
+  await removeTodoFromDOM(todo.id);
   trashPage = 1;
   updateFooter();
   updateFilterButtons();
@@ -1097,7 +1084,7 @@ async function restoreTrash(id) {
   }
 
   await dbPut(todo);
-  moveTo(todo, 'deleted', wasCompleted ? 'completed' : 'active');
+  await removeTodoFromDOM(todo.id);
   trashPage = 1;
   updateFooter();
   updateFilterButtons();
@@ -1532,6 +1519,8 @@ async function init() {
   await openDB();
   await ensureStore();
   [active, completed, deleted] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+  active.reverse();
+  completed.reverse();
   active.forEach(todo => {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
