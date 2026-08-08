@@ -101,8 +101,14 @@ let db = null;
 /** @type {Todo[]} */
 let active = [];
 
+/** @type {Boolean} */
+let activeJumbled = false;
+
 /** @type {Todo[]} */
 let completed = [];
+
+/** @type {Boolean} */
+let completedJumbled = false;
 
 /** @type {Todo[]} */
 let deleted = [];
@@ -644,7 +650,6 @@ async function removeTodoFromDOM(id) {
     el.style.padding = '0';
     el.style.margin = '0';
   });
-  el.addEventListener('transitionend', () => console.log('transitionend fired'), { once: true });
   await new Promise(resolve => {
     el.addEventListener('transitionend', resolve, { once: true });
     setTimeout(resolve, 250);
@@ -668,6 +673,10 @@ function render() {
   todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
 
   if (statusFilter === 'active') {
+    if (activeJumbled){
+      active.sort((t1, t2) => t2.createdAt - t1.createdAt );
+      activeJumbled = false;
+    }
     const activeItems = active.filter(todo => matchesFilters(todo, true));
     activeItems.forEach(todo => activeList.appendChild(buildItem(todo, 'active')));
 
@@ -680,7 +689,10 @@ function render() {
 
     updateFooter();
   } else if (statusFilter === 'completed') {
-
+    if (completedJumbled){
+      completed.sort((t1, t2) => t2.createdAt - t1.createdAt );
+      completedJumbled = false;
+    }
     const completedItems = completed.filter(todo => matchesFilters(todo, false));
     const completedTotal = completedItems.length;
     const completedPages = Math.max(1, Math.ceil(completedTotal / PAGE_SIZE));
@@ -1012,6 +1024,7 @@ async function toggleTodo(id) {
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
     completed.push(todo);
+    completedJumbled = true;
     await removeTodoFromDOM(todo.id);
   } else {
     // Decomplete: completed → active
@@ -1021,6 +1034,7 @@ async function toggleTodo(id) {
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
     active.push(todo);
+    activeJumbled = true;
     await removeTodoFromDOM(todo.id);
   }
 
