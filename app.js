@@ -1548,10 +1548,10 @@ async function init() {
     });
   });
 
-  // Notification: list active tasks every 30s
-  setInterval(() => {
-    sendForegroundNotification();
-  }, 30_000);
+//   // Notification: list active tasks every 300s
+//   setInterval(() => {
+//     sendForegroundNotification();
+//   }, 300_000);
 }
 
 /**
