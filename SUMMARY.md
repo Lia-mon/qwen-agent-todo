@@ -71,9 +71,9 @@ init()
   ├── render() — build DOM from memory arrays
   └── event listeners setup
 
-addTodo() → dbAdd() → render()
-toggleTodo() → dbPut() → moveTo() → render()
-deleteTodo() → dbPut() → moveTo() → render()
+addTodo() → dbAdd() → render() (rework pending)
+toggleTodo() → dbPut() → moveTo() → render() (rework pending)
+deleteTodo() → dbPut() → moveTo() → render() (rework pending)
 restoreTrash() → dbPut() → moveTo() → renderSettingsTrash()
 permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
 ```
