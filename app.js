@@ -381,6 +381,24 @@ function sendGroupedNotification(changes) {
   });
 }
 
+/**
+ * Sends a foreground notification listing active tasks.
+ * Called every 30 seconds while the app is visible.
+ */
+function sendForegroundNotification() {
+  if (active.length === 0) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const preview = active.slice(0, 5).map(t => t.text).join(' • ');
+  const suffix = active.length > 5 ? ` +${active.length - 5} more` : '';
+
+  new Notification('Active tasks', {
+    body: `${active.length} task${active.length > 1 ? 's' : ''}${preview ? ': ' + preview + suffix : ''}`,
+    icon: './icon-192x192.png',
+    tag: 'active-tasks'
+  });
+}
+
 // ── Background Check ──────────────────────────────────────────
 
 /**
@@ -1529,6 +1547,11 @@ async function init() {
       applyTheme(btn.dataset.theme);
     });
   });
+
+  // Notification: list active tasks every 30s
+  setInterval(() => {
+    sendForegroundNotification();
+  }, 30_000);
 }
 
 /**

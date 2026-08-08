@@ -1,6 +1,36 @@
+// ── Activate & Pre-cache ─────────────────────────────────────
+// Immediately claim all open clients and pre-cache critical assets
+// so the app works even if the first fetch fails.
+
+const CRITICAL_ASSETS = [
+  './',
+  './styles.css',
+  './girly.css',
+  './suave.css',
+  './gothic.css',
+  './farm.css',
+  './app.js',
+  './icon-192x192.png',
+  './icon-512x512.png',
+  './manifest.json',
+];
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    clients.claim().then(() => {
+      return caches.open('todo-app-dev').then(cache => {
+        return cache.addAll(CRITICAL_ASSETS).catch(() => {
+          // Some assets may not exist yet (e.g. on first install)
+          console.warn('Pre-cache incomplete, will fill on first fetch');
+        });
+      });
+    })
+  );
+});
+
 // ── Fetch ─────────────────────────────────────────────────────
-// Network-first for all requests. Simpler during development —
-// always fetches fresh assets, no manual cache invalidation needed.
+// Network-first for all requests. Always fetches fresh assets,
+// re-caches on every load to survive iOS 7-day cache expiry.
 
 self.addEventListener('fetch', event => {
   const { request } = event;
