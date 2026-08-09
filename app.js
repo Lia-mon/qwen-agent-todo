@@ -73,7 +73,7 @@ const dialogCancel = document.getElementById('dialog-cancel');
 const dialogDelete = document.getElementById('dialog-delete');
 
 /** @type {HTMLElement} */
-const dialogTitle = document.querySelector('.dialog-title');
+const dialogTitle = document.querySelector('#dialog-task-title');
 
 /** @type {HTMLElement} */
 const dialogSubmit = document.querySelector('.dialog-submit');
