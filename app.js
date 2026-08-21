@@ -44,6 +44,15 @@ const durationSelect = document.getElementById('duration-select');
 /** @type {HTMLTextAreaElement} */
 const notesInput = document.getElementById('notes-input');
 
+/** @type {HTMLUListElement} */
+const subtaskList = document.getElementById('subtask-list');
+
+/** @type {HTMLInputElement} */
+const subtaskInput = document.getElementById('subtask-input');
+
+/** @type {HTMLButtonElement} */
+const subtaskAddBtn = document.getElementById('subtask-add-btn');
+
 /** @type {HTMLElement} */
 const todoList = document.getElementById('todo-list');
 if (!todoList) console.error('todoList is null!');
@@ -119,6 +128,9 @@ let currentProfileId = null;
 
 /** @type {number | null} */
 let editingTodoId = null;
+
+/** Working subtask list for the dialog. Deep-copied into the todo on save. */
+let dialogSubtasks = [];
 
 /** @type {'notifications'|'data'|'personalization'|'trash'} */
 let activeSettingsTab = 'notifications';
@@ -852,6 +864,15 @@ function buildItem(todo, view) {
       meta.appendChild(noteBadge);
     }
 
+    if (todo.subtasks && todo.subtasks.length) {
+      const doneCount = todo.subtasks.filter(s => s.done).length;
+      const stBadge = document.createElement('span');
+      stBadge.className = 'badge subtasks';
+      stBadge.textContent = `${doneCount}/${todo.subtasks.length}`;
+      stBadge.title = `${doneCount} of ${todo.subtasks.length} subtasks done`;
+      meta.appendChild(stBadge);
+    }
+
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
     li.append(checkbox, textArea);
@@ -1175,6 +1196,84 @@ function updateFilterButtons() {
 // ── Dialog Reset ───────────────────────────────────────────────
 
 /** Resets the dialog to its default "add" state. */
+/** Generates a unique-enough id without requiring a secure context. */
+function newId() {
+  return crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// ── Dialog subtasks ────────────────────────────────────────────
+
+/**
+ * Rebuilds the dialog's subtask list from dialogSubtasks.
+ */
+function renderDialogSubtasks() {
+  subtaskList.innerHTML = '';
+  for (const st of dialogSubtasks) {
+    const li = document.createElement('li');
+    li.className = 'subtask-item';
+
+    const label = document.createElement('label');
+    label.className = 'subtask-label';
+
+    const textEl = document.createElement('span');
+    textEl.className = `subtask-text${st.done ? ' done' : ''}`;
+    textEl.textContent = st.text;
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'subtask-check';
+    check.checked = st.done;
+    check.addEventListener('change', () => {
+      st.done = check.checked;
+      textEl.classList.toggle('done', st.done);
+    });
+
+    label.append(check, textEl);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'subtask-delete';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Remove subtask';
+    delBtn.addEventListener('click', () => {
+      dialogSubtasks = dialogSubtasks.filter(s => s.id !== st.id);
+      renderDialogSubtasks();
+    });
+
+    li.append(label, delBtn);
+    subtaskList.appendChild(li);
+  }
+}
+
+/**
+ * Adds the subtask typed in subtaskInput to the dialog's working list.
+ */
+function addDialogSubtask() {
+  const text = subtaskInput.value.trim();
+  if (!text) return;
+  dialogSubtasks.push({ id: newId(), text, done: false });
+  subtaskInput.value = '';
+  renderDialogSubtasks();
+  subtaskInput.focus();
+}
+
+subtaskAddBtn.addEventListener('click', addDialogSubtask);
+subtaskInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addDialogSubtask();
+  }
+});
+
+// Clear the working lists whenever the dialog closes (cancel, submit, ESC, backdrop)
+// so state never leaks into the next open.
+dialog.addEventListener('close', () => {
+  dialogSubtasks = [];
+  renderDialogSubtasks();
+});
+
 function resetDialog() {
   editingTodoId = null;
   dialogTitle.textContent = 'New Task';
@@ -1201,6 +1300,8 @@ function openEditDialog(todo) {
   durationSelect.value = todo.duration || '5';
   deadlineInput.value = todo.deadline ? msToDatetimeLocal(todo.deadline) : '';
   notesInput.value = todo.notes || '';
+  dialogSubtasks = (todo.subtasks || []).map(s => ({ ...s }));
+  renderDialogSubtasks();
 
   dialogTitle.textContent = 'Edit Task';
   dialogSubmit.textContent = 'Save';
@@ -1234,7 +1335,7 @@ function msToDatetimeLocal(timestamp) {
  * @param {string} duration
  * @returns {Promise<void>}
  */
-async function addTodo(text, repeat, importance, deadlineStr, duration, notes) {
+async function addTodo(text, repeat, importance, deadlineStr, duration, notes, subtasks) {
   const now = Date.now();
   const deadlineMs = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   const todo = {
@@ -1245,6 +1346,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration, notes) {
     deadline: deadlineMs,
     duration,
     notes,
+    subtasks: (subtasks || []).map(s => ({ ...s })),
     completed: 0,
     completedAt: null,
     deleted: 0,
@@ -1272,7 +1374,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration, notes) {
  * @param {string} duration - New duration string.
  * @returns {Promise<void>}
  */
-async function updateTodo(id, text, repeat, importance, deadlineStr, duration, notes) {
+async function updateTodo(id, text, repeat, importance, deadlineStr, duration, notes, subtasks) {
   // Search in active first, then completed
   const todo = active.find(t => t.id === id) || completed.find(t => t.id === id);
   if (!todo) return;
@@ -1283,6 +1385,7 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
   todo.duration = duration;
   todo.deadline = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   todo.notes = notes;
+  todo.subtasks = (subtasks || []).map(s => ({ ...s }));
 
   await dbPut(todo);
   updateTodoInDOM(todo);
@@ -1497,7 +1600,8 @@ todoForm.addEventListener('submit', async e => {
         importanceSelect.value,
         deadlineInput.value,
         durationSelect.value,
-        notesInput.value.trim()
+        notesInput.value.trim(),
+        dialogSubtasks
       );
       resetDialog();
       dialog.close();
@@ -1508,7 +1612,8 @@ todoForm.addEventListener('submit', async e => {
         importanceSelect.value,
         deadlineInput.value,
         durationSelect.value,
-        notesInput.value.trim()
+        notesInput.value.trim(),
+        dialogSubtasks
       );
       todoInput.value = '';
       notesInput.value = '';
