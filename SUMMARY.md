@@ -11,7 +11,7 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 | File | Purpose |
 |------|---------|
 | `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, and add/edit dialog. Loads all CSS themes and the JS bundle. |
-| `app.js` | All application logic (~1860 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, data import/export. |
+| `app.js` | All application logic (~2160 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, data import/export. |
 | `styles.css` | Base styles and CSS custom properties (colors, radii, transitions, spacing). Defines the "Classic" theme. Includes base layout, components, badges, trash actions, pagination, and responsive breakpoints. |
 | `girly.css` | Pink/pastel theme override — rounded corners, soft shadows, pink accent colors. |
 | `suave.css` | Dark navy theme — sharp corners, no shadows, cool blue/red palette, Inter font. |
@@ -36,7 +36,10 @@ Todo {
   deadline: number | null   // Unix timestamp
   duration: string | null  // '5' | '10' | '30' | '60' | 'multi'
   importance: 'high' | 'medium' | 'low'
-  repeat: string | null  // 'daily' | 'weekly' | 'monthly' | '30s' | ''
+  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | '30s' | ''
+  notes: string          // Free-form notes (dialog textarea)
+  subtasks: Array<{id, text, done}>  // Simple checklist, managed in the dialog
+  attachments: Array<{id, name, type, size, blob: Blob}>  // File attachments
   completed: number      // 0 = active, 1 = completed
   completedAt: number | null
   deleted: number        // 0 = not deleted, 1 = trashed
@@ -87,8 +90,11 @@ permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
 
 ### Task Management
 
-- **Add tasks** via dialog with text, repeat schedule, importance, duration, and deadline
+- **Add tasks** via dialog with text, repeat schedule, importance, duration, deadline, notes, subtasks, and file attachments
 - **Edit tasks** by clicking the text area (same dialog, `editingTodoId` tracks mode)
+- **Notes** — free-form textarea in the dialog; a 📝 badge marks tasks with notes in the list (hover shows the text)
+- **Subtasks** — inline checklist in the dialog (add/check/remove); an `N/M` progress badge shows in the list
+- **Attachments** — file picker in the dialog; blobs stored on the todo, `N` count badge (📎) in the list, click a name to download
 - **Complete tasks** by clicking the checkbox — moves from active to completed
 - **Delete tasks** (soft delete) — moves to trash, not permanently removed
 - **Restore from trash** — moves back to active or completed depending on prior state
@@ -96,7 +102,7 @@ permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
 
 ### Repeatable Tasks
 
-Tasks can be set to repeat daily, weekly, monthly, or a 30s test interval. When a repeatable task is completed, it disappears and re-emerges after its period elapses. `checkTasks()` runs once on init (interval disabled) to process re-emergence and urgency-based notifications.
+Tasks can be set to repeat daily, weekly, biweekly, monthly, or a 30s test interval. When a repeatable task is completed, it disappears and re-emerges after its period elapses. `checkTasks()` runs once on init (interval disabled) to process re-emergence and urgency-based notifications.
 
 ### Urgency System
 
@@ -133,7 +139,7 @@ Five tabs in a `<dialog>` modal:
 | Tab | Contents |
 |-----|----------|
 | Notifications | Enable/disable browser notifications |
-| Data Management | Export JSON, Import JSON, Clear All Data |
+| Data Management | Export JSON, Import JSON, Clear All Data (attachment blobs are serialized to base64 data URLs for export and restored to Blobs on import) |
 | Personalization | Theme selector (Classic/Girly/Suave/Gothic/Farm), Reduce Motion toggle |
 | Trash | Paginated list of deleted tasks with Restore / Delete Forever buttons |
 | Profiles | Add/Edit/Delete profiles; Load button switches the active profile (marked with an "Active" badge) |

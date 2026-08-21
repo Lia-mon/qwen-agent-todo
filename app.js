@@ -7,7 +7,10 @@
  * @property {number} completed - Completion flag: 0 (active) or 1 (completed)
  * @property {number} deleted - Deletion flag: 0 (active) or 1 (trashed)
  * @property {number | null} deletedAt - Unix timestamp when task was deleted (null if not deleted)
- * @property {string | null} repeat - Repeat schedule: 'daily' | 'weekly' | 'monthly' | '30s' | '' | null
+ * @property {string | null} repeat - Repeat schedule: 'daily' | 'weekly' | 'biweekly' | 'monthly' | '30s' | '' | null
+ * @property {string} notes - Free-form notes
+ * @property {Array<{id: string, text: string, done: boolean}>} subtasks - Simple checklist
+ * @property {Array<{id: string, name: string, type: string, size: number, blob: Blob}>} attachments - File attachments
  * @property {'high' | 'medium' | 'low'} importance - Task priority level
  * @property {number | null} deadline - Unix timestamp of deadline (null if none)
  * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
@@ -630,6 +633,7 @@ function getRepeatMs(repeat) {
   switch (repeat) {
     case 'daily': return 24 * 60 * 60 * 1000;
     case 'weekly': return 7 * 24 * 60 * 60 * 1000;
+    case 'biweekly': return 14 * 24 * 60 * 60 * 1000;
     case 'monthly': return 30 * 24 * 60 * 60 * 1000;
     case '30s': return 30 * 1000;
     default: return 0;
