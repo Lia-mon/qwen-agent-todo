@@ -12,6 +12,7 @@
  * @property {number | null} deadline - Unix timestamp of deadline (null if none)
  * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
  * @property {number} [nextRepeatDate] - Next re-emergence timestamp (only for completed repeatable tasks)
+ * @property {number} profileId - ID of the profile this todo belongs to
  */
 
 // ── DOM References ─────────────────────────────────────────────
@@ -90,7 +91,7 @@ const filtersPanel = document.querySelector('.filters');
 const DB_NAME = 'TodoAppDB';
 
 /** @type {number} */
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** @type {string} */
 const STORE_NAME = 'todos';
@@ -109,6 +110,9 @@ let completed = [];
 
 /** @type {Todo[]} */
 let deleted = [];
+
+/** @type {number | null} */
+let currentProfileId = null;
 
 /** @type {number | null} */
 let editingTodoId = null;
@@ -145,7 +149,7 @@ function binaryInsert(arr, item, compare) {
 
 
 /**
- * Creates the 'todos' object store and its indexes on the given database.
+ * Creates the 'todos' and 'profiles' object stores with their indexes on the given database.
  * @param {IDBDatabase} database
  */
 function createStore(database) {
@@ -154,22 +158,71 @@ function createStore(database) {
   store.createIndex('completed', 'completed', { unique: false });
   store.createIndex('createdAt', 'createdAt', { unique: false });
   store.createIndex('completedAt', 'completedAt', { unique: false });
+  store.createIndex('profileId', 'profileId', { unique: false });
 
   const profilesStore = database.createObjectStore(PROFILES_STORE_NAME, { keyPath: 'id', autoIncrement: true });
   profilesStore.createIndex('name', 'name', { unique: false });
 }
 
 /**
- * Opens the IndexedDB database with a single 'todos' store and indexes.
+ * v1 → v2 migration: adds the 'profileId' index to todos, ensures the 'profiles' store
+ * exists, creates a 'Default' profile, and assigns all existing todos to it.
+ * @param {IDBDatabase} database
+ * @param {IDBTransaction} tx - The versionchange transaction
+ */
+function migrateToV2(database, tx) {
+  if (!database.objectStoreNames.contains(PROFILES_STORE_NAME)) {
+    const profilesStore = database.createObjectStore(PROFILES_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+    profilesStore.createIndex('name', 'name', { unique: false });
+  }
+
+  const todosStore = tx.objectStore(STORE_NAME);
+  if (!todosStore.indexNames.contains('profileId')) {
+    todosStore.createIndex('profileId', 'profileId', { unique: false });
+  }
+
+  const defaultProfileReq = tx.objectStore(PROFILES_STORE_NAME).add({ name: 'Default' });
+  defaultProfileReq.onsuccess = () => {
+    const profileId = defaultProfileReq.result;
+    const cursorReq = todosStore.openCursor();
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (!cursor) return;
+      if (cursor.value.profileId == null) {
+        cursor.update({ ...cursor.value, profileId });
+      }
+      cursor.continue();
+    };
+  };
+  defaultProfileReq.onerror = () => console.error('Failed to create Default profile during migration:', defaultProfileReq.error);
+}
+
+/**
+ * Handles database version upgrades.
+ * @param {Event} event - The versionchange event
+ */
+function onUpgradeNeeded(event) {
+  const database = event.target.result;
+  const oldVersion = event.oldVersion;
+
+  if (oldVersion < 1) {
+    createStore(database);
+  }
+
+  if (oldVersion < 2) {
+    migrateToV2(database, event.target.transaction);
+  }
+}
+
+/**
+ * Opens the IndexedDB database, running any needed upgrades.
  * @returns {Promise<void>}
  */
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = (event) => {
-      createStore(event.target.result);
-    };
+    request.onupgradeneeded = onUpgradeNeeded;
 
     request.onsuccess = () => {
       db = request.result;
@@ -230,13 +283,14 @@ function dbDelete(id) {
 }
 
 /**
- * Retrieves all todos from the store, split into active/completed/deleted arrays.
+ * Retrieves all todos for a profile, split into active/completed/deleted arrays.
+ * @param {number} profileId - Profile to load todos for
  * @returns {Promise<{active: Todo[], completed: Todo[], deleted: Todo[]}>}
  */
-function dbGet() {
+function dbGet(profileId) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const request = tx.objectStore(STORE_NAME).getAll();
+    const request = tx.objectStore(STORE_NAME).index('profileId').getAll(profileId);
     request.onsuccess = () => {
       const all = request.result;
       const active = [], completed = [], deleted = [];
@@ -294,6 +348,42 @@ function dbDeleteProfile(id) {
   });
 }
 
+/**
+ * Counts todos belonging to a profile.
+ * @param {number} profileId
+ * @returns {Promise<number>}
+ */
+function dbCountProfileTodos(profileId) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).index('profileId').count(profileId);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Deletes all todos belonging to a profile.
+ * @param {number} profileId
+ * @returns {Promise<void>}
+ */
+function dbDeleteProfileTodos(profileId) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const index = tx.objectStore(STORE_NAME).index('profileId');
+    const cursorReq = index.openCursor(IDBKeyRange.only(profileId));
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (cursor) {
+        cursor.delete();
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 /** @type {number | null} */
 let editingProfileId = null;
 
@@ -316,11 +406,14 @@ async function renderProfiles() {
 
   for (const profile of profiles) {
     const li = document.createElement('li');
-    li.className = 'profile-item';
+    li.className = 'profile-item' + (profile.id === currentProfileId ? ' active' : '');
     li.dataset.id = profile.id;
     li.innerHTML = `
       <span class="profile-name">${escapeHtml(profile.name)}</span>
       <div class="profile-actions">
+        ${profile.id === currentProfileId
+          ? '<span class="profile-active-badge">Active</span>'
+          : `<button class="settings-action-btn profile-load-btn" data-action="load" data-id="${profile.id}">Load</button>`}
         <button class="settings-action-btn profile-edit-btn" data-action="edit" data-id="${profile.id}">Edit</button>
         <button class="settings-action-btn danger profile-delete-btn" data-action="delete" data-id="${profile.id}">Delete</button>
       </div>
@@ -375,17 +468,50 @@ async function saveProfile() {
 }
 
 /**
- * Deletes a profile after confirmation.
+ * Deletes a profile and all of its todos after confirmation.
  * @param {number} id
  */
 async function deleteProfile(id) {
-  if (!confirm('Delete this profile?')) return;
+  if (id === currentProfileId) {
+    alert('Cannot delete the active profile.');
+    return;
+  }
+  const profiles = await dbGetProfiles();
+  if (profiles.length <= 1) {
+    alert('Cannot delete the last profile.');
+    return;
+  }
+  const todoCount = await dbCountProfileTodos(id);
+  const taskWord = todoCount === 1 ? 'task' : 'tasks';
+  if (!confirm(`Delete this profile and its ${todoCount} ${taskWord}? This cannot be undone.`)) return;
   try {
+    await dbDeleteProfileTodos(id);
     await dbDeleteProfile(id);
     renderProfiles();
   } catch (err) {
     console.error('Failed to delete profile:', err);
   }
+}
+
+/**
+ * Switches to the given profile: loads its todos into memory,
+ * resets pagination/urgency state, and re-renders the UI.
+ * @param {number} id
+ */
+async function loadProfile(id) {
+  if (id === currentProfileId) return;
+  currentProfileId = id;
+  localStorage.setItem('activeProfile', String(id));
+  ({ active, completed, deleted } = await dbGet(currentProfileId));
+  active.sort((a, b) => b.createdAt - a.createdAt);
+  completed.sort((a, b) => b.completedAt - a.completedAt);
+  completedPage = 1;
+  trashPage = 1;
+  lastUrgencyMap.clear();
+  active.forEach(todo => lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration)));
+  render();
+  renderProfiles();
+  if (activeSettingsTab === 'trash') renderSettingsTrash();
 }
 
 /**
@@ -1111,7 +1237,8 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
     completed: 0,
     completedAt: null,
     deleted: 0,
-    deletedAt: null
+    deletedAt: null,
+    profileId: currentProfileId
   };
   const id = await dbAdd(todo);
   todo.id = id;
@@ -1485,7 +1612,7 @@ settingsDeletedList.addEventListener('click', (e) => {
 
 async function exportData() {
   try {
-    const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet();
+    const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet(currentProfileId);
     const data = {
       active: activeArr,
       completed: completedArr,
@@ -1509,7 +1636,7 @@ async function importData(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  if (!confirm('Importing will overwrite all current data. Continue?')) {
+  if (!confirm('Importing will overwrite all tasks in the current profile. Continue?')) {
     e.target.value = '';
     return;
   }
@@ -1523,13 +1650,8 @@ async function importData(e) {
         return;
       }
 
-      // Clear existing store
-      const clearTx = db.transaction(STORE_NAME, 'readwrite');
-      clearTx.objectStore(STORE_NAME).clear();
-      await new Promise((resolve, reject) => {
-        clearTx.oncomplete = resolve;
-        clearTx.onerror = () => reject(clearTx.error);
-      });
+      // Clear the current profile's existing tasks
+      await dbDeleteProfileTodos(currentProfileId);
 
       // Write imported tasks (strip IDs so auto-increment assigns fresh ones)
       const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -1539,7 +1661,7 @@ async function importData(e) {
         if (Array.isArray(arr)) {
           for (const todo of arr) {
             const { id, ...todoWithoutId } = todo;
-            const req = store.add(todoWithoutId);
+            const req = store.add({ ...todoWithoutId, profileId: currentProfileId });
             importCounts.push(req);
             req.onerror = () => console.warn('Failed to import todo:', req.error);
           }
@@ -1554,7 +1676,7 @@ async function importData(e) {
       console.log(`Imported ${totalCount - failedCount} todos`);
 
       // Refresh JS state
-      const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet();
+      const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet(currentProfileId);
       active = activeArr;
       completed = completedArr;
       deleted = deletedArr;
@@ -1636,11 +1758,9 @@ async function ensureStore() {
   return new Promise((resolve, reject) => {
     const deleteReq = indexedDB.deleteDatabase('TodoAppDB');
     deleteReq.onsuccess = () => {
-      // Now open fresh — onupgradeneeded will fire with version 1
+      // Now open fresh — onupgradeneeded will fire for a brand-new DB
       const openReq = indexedDB.open('TodoAppDB', DB_VERSION);
-      openReq.onupgradeneeded = (event) => {
-        createStore(event.target.result);
-      };
+      openReq.onupgradeneeded = onUpgradeNeeded;
       openReq.onsuccess = () => {
         db = openReq.result;
         resolve();
@@ -1652,13 +1772,28 @@ async function ensureStore() {
 }
 
 /**
+ * Determines which profile to load: the saved one if it still exists,
+ * otherwise the first profile in the store. Persists the choice.
+ * @returns {Promise<number | null>}
+ */
+async function resolveCurrentProfile() {
+  const profiles = await dbGetProfiles();
+  if (profiles.length === 0) return null;
+  const savedId = Number(localStorage.getItem('activeProfile')) || null;
+  const current = profiles.some(p => p.id === savedId) ? savedId : profiles[0].id;
+  localStorage.setItem('activeProfile', String(current));
+  return current;
+}
+
+/**
  * Initializes the application: opens DB, loads todos, starts background checkers, and renders.
  * @returns {Promise<void>}
  */
 async function init() {
   await openDB();
   await ensureStore();
-  ({ active, completed, deleted } = await dbGet());
+  currentProfileId = await resolveCurrentProfile();
+  ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((t1,t2)=>t2.completedAt - t1.completedAt);
   active.forEach(todo => {
@@ -1704,6 +1839,7 @@ async function init() {
     if (!actionEl) return;
     const action = actionEl.dataset.action;
     const id = Number(actionEl.dataset.id);
+    if (action === 'load') loadProfile(id);
     if (action === 'edit') openProfileDialog(id);
     if (action === 'delete') deleteProfile(id);
   });

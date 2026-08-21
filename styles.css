@@ -1157,6 +1157,16 @@ body {
   flex-shrink: 0;
 }
 
+.profile-active-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  user-select: none;
+}
+
 /* ── Reduced Motion ─────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

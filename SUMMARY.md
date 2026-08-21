@@ -42,6 +42,7 @@ Todo {
   deleted: number        // 0 = not deleted, 1 = trashed
   deletedAt: number | null
   nextRepeatDate: number | null  // For repeatable tasks
+  profileId: number              // Owning profile (profiles store)
 }
 ```
 
@@ -56,17 +57,19 @@ Three boolean flags (`completed`, `deleted`) create four logical states:
 
 ### Storage
 
-- **IndexedDB**: `TodoAppDB` → `todos` object store with indexes on `deleted`, `completed`, `createdAt`, `completedAt`
-- **In-memory arrays**: `active[]`, `completed[]`, `deleted[]` — the JS source of truth, synced to IndexedDB
-- **localStorage**: Theme preference (`theme` key)
+- **IndexedDB** (version 2): `TodoAppDB` → `todos` store with indexes on `deleted`, `completed`, `createdAt`, `completedAt`, `profileId`; `profiles` store (`id` autoIncrement, `name`) with a `name` index
+- **Profiles**: each todo belongs to a profile via `profileId`. The v1 → v2 migration creates a 'Default' profile and assigns all legacy todos to it. Only the current profile's todos are loaded into memory; switching profiles (`loadProfile`) reloads that profile's todos, resets pagination/urgency state, and persists the choice to `localStorage('activeProfile')`. Deleting a profile hard-deletes its todos (active profile and last profile cannot be deleted)
+- **In-memory arrays**: `active[]`, `completed[]`, `deleted[]` — the JS source of truth for the current profile, synced to IndexedDB
+- **localStorage**: Theme preference (`theme` key), active profile (`activeProfile` key)
 
 ### Core Flow
 
 ```
 init()
-  ├── openDB() — open IndexedDB connection
-  ├── ensureStore() — recreate DB if store is missing
-  ├── dbGet() — load active, completed, deleted into memory
+  ├── openDB() — open IndexedDB connection (runs version upgrades)
+  ├── ensureStore() — recreate DB if a store is missing
+  ├── resolveCurrentProfile() — pick saved/first profile, persist choice
+  ├── dbGet(profileId) — load that profile's active/completed/deleted into memory
   ├── checkTasks() — one-shot: handle repeatables & urgency changes
   ├── render() — build DOM from memory arrays
   └── event listeners setup
@@ -125,7 +128,7 @@ Filters apply to the main active/completed views. Trash view ignores filters.
 
 ### Settings
 
-Four tabs in a `<dialog>` modal:
+Five tabs in a `<dialog>` modal:
 
 | Tab | Contents |
 |-----|----------|
@@ -133,6 +136,7 @@ Four tabs in a `<dialog>` modal:
 | Data Management | Export JSON, Import JSON, Clear All Data |
 | Personalization | Theme selector (Classic/Girly/Suave/Gothic/Farm), Reduce Motion toggle |
 | Trash | Paginated list of deleted tasks with Restore / Delete Forever buttons |
+| Profiles | Add/Edit/Delete profiles; Load button switches the active profile (marked with an "Active" badge) |
 
 ### Theming
 
