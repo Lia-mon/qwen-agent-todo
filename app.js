@@ -1093,9 +1093,6 @@ function renderSettingsTrash() {
   } else {
     renderPagination(trashTotal, trashPages, trashPage, 'trash');
   }
-
-  // Update footer count for trash view
-  countEl.textContent = `${deleted.length} in trash`;
 }
 
 
@@ -1374,9 +1371,7 @@ async function restoreTrash(id) {
   removeTodoFromDOM(todo.id);
   await dbPut(todo);
   trashPage = 1;
-  updateFooter();
-  updateFilterButtons();
-  if (activeSettingsTab === 'trash') renderSettingsTrash();
+  render();
 }
 
 /**

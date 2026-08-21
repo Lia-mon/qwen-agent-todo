@@ -74,10 +74,10 @@ init()
   ├── render() — build DOM from memory arrays
   └── event listeners setup
 
-addTodo() → dbAdd() → render() (rework pending)
-toggleTodo() → dbPut() → moveTo() → render() (rework pending)
-deleteTodo() → dbPut() → moveTo() → render() (rework pending)
-restoreTrash() → dbPut() → moveTo() → renderSettingsTrash()
+addTodo() → dbAdd() → prepend item + updateFooter()
+toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter()
+deleteTodo() → dbPut() → removeTodoFromDOM() + updateFooter() + renderSettingsTrash() (if trash tab open)
+restoreTrash() → dbPut() → render() (re-renders main list + trash tab)
 permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
 ```
 
