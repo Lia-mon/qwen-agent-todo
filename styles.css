@@ -87,6 +87,12 @@ input, select, textarea {
   --badge-repeatable-fg: #27ae60;
   --badge-deadline-bg: #f0f0f0;
   --badge-deadline-fg: #666;
+  --badge-note-bg: #f0f0f0;
+  --badge-note-fg: #666;
+  --badge-subtasks-bg: #eafaf1;
+  --badge-subtasks-fg: #27ae60;
+  --badge-attachments-bg: #eaf6ff;
+  --badge-attachments-fg: #3498db;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 4px;
@@ -638,6 +644,23 @@ body {
   border-color: var(--color-primary);
 }
 
+#todo-form > label textarea {
+  padding: 6px 8px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  transition: border-color var(--transition-base);
+}
+
+#todo-form > label textarea:focus {
+  border-color: var(--color-primary);
+}
+
 /* ── Add Button ─────────────────────────────────────────────── */
 
 .add-btn {
@@ -883,6 +906,9 @@ body {
 
 .badge.repeatable { background: var(--badge-repeatable-bg); color: var(--badge-repeatable-fg); }
 .badge.deadline { background: var(--badge-deadline-bg); color: var(--badge-deadline-fg); font-size: 0.65rem; }
+.badge.note { background: var(--badge-note-bg); color: var(--badge-note-fg); }
+.badge.subtasks { background: var(--badge-subtasks-bg); color: var(--badge-subtasks-fg); }
+.badge.attachments { background: var(--badge-attachments-bg); color: var(--badge-attachments-fg); }
 
 .todo-item .timestamps {
   display: flex;

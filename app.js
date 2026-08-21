@@ -41,6 +41,9 @@ const deadlineInput = document.getElementById('deadline-input');
 /** @type {HTMLSelectElement} */
 const durationSelect = document.getElementById('duration-select');
 
+/** @type {HTMLTextAreaElement} */
+const notesInput = document.getElementById('notes-input');
+
 /** @type {HTMLElement} */
 const todoList = document.getElementById('todo-list');
 if (!todoList) console.error('todoList is null!');
@@ -841,6 +844,14 @@ function buildItem(todo, view) {
       meta.appendChild(dlBadge);
     }
 
+    if (todo.notes) {
+      const noteBadge = document.createElement('span');
+      noteBadge.className = 'badge note';
+      noteBadge.textContent = '📝';
+      noteBadge.title = todo.notes;
+      meta.appendChild(noteBadge);
+    }
+
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
     li.append(checkbox, textArea);
@@ -1172,6 +1183,7 @@ function resetDialog() {
   todoForm.reset();
   deadlineInput.value = '';
   durationSelect.value = '5';
+  notesInput.value = '';
 }
 
 // ── Actions ────────────────────────────────────────────────────
@@ -1188,6 +1200,7 @@ function openEditDialog(todo) {
   importanceSelect.value = todo.importance;
   durationSelect.value = todo.duration || '5';
   deadlineInput.value = todo.deadline ? msToDatetimeLocal(todo.deadline) : '';
+  notesInput.value = todo.notes || '';
 
   dialogTitle.textContent = 'Edit Task';
   dialogSubmit.textContent = 'Save';
@@ -1221,7 +1234,7 @@ function msToDatetimeLocal(timestamp) {
  * @param {string} duration
  * @returns {Promise<void>}
  */
-async function addTodo(text, repeat, importance, deadlineStr, duration) {
+async function addTodo(text, repeat, importance, deadlineStr, duration, notes) {
   const now = Date.now();
   const deadlineMs = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   const todo = {
@@ -1231,6 +1244,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
     importance,
     deadline: deadlineMs,
     duration,
+    notes,
     completed: 0,
     completedAt: null,
     deleted: 0,
@@ -1258,7 +1272,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration) {
  * @param {string} duration - New duration string.
  * @returns {Promise<void>}
  */
-async function updateTodo(id, text, repeat, importance, deadlineStr, duration) {
+async function updateTodo(id, text, repeat, importance, deadlineStr, duration, notes) {
   // Search in active first, then completed
   const todo = active.find(t => t.id === id) || completed.find(t => t.id === id);
   if (!todo) return;
@@ -1268,6 +1282,7 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration) {
   todo.importance = importance;
   todo.duration = duration;
   todo.deadline = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
+  todo.notes = notes;
 
   await dbPut(todo);
   updateTodoInDOM(todo);
@@ -1481,7 +1496,8 @@ todoForm.addEventListener('submit', async e => {
         repeatSelect.value,
         importanceSelect.value,
         deadlineInput.value,
-        durationSelect.value
+        durationSelect.value,
+        notesInput.value.trim()
       );
       resetDialog();
       dialog.close();
@@ -1491,9 +1507,11 @@ todoForm.addEventListener('submit', async e => {
         repeatSelect.value,
         importanceSelect.value,
         deadlineInput.value,
-        durationSelect.value
+        durationSelect.value,
+        notesInput.value.trim()
       );
       todoInput.value = '';
+      notesInput.value = '';
       dialog.close();
     }
   } finally {
