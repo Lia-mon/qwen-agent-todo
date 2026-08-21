@@ -63,6 +63,21 @@ const attachmentInput = document.getElementById('attachment-input');
 const attachmentList = document.getElementById('attachment-list');
 
 /** @type {HTMLElement} */
+const attachmentGallery = document.getElementById('attachment-gallery');
+
+/** @type {HTMLElement} */
+const galleryTrack = document.getElementById('gallery-track');
+
+/** @type {HTMLButtonElement} */
+const galleryPrev = document.getElementById('gallery-prev');
+
+/** @type {HTMLButtonElement} */
+const galleryNext = document.getElementById('gallery-next');
+
+/** @type {HTMLElement} */
+const galleryCounter = document.getElementById('gallery-counter');
+
+/** @type {HTMLElement} */
 const todoList = document.getElementById('todo-list');
 if (!todoList) console.error('todoList is null!');
 
@@ -1314,7 +1329,9 @@ function clearAttachmentThumbs() {
 }
 
 /**
- * Rebuilds the dialog's attachment list from dialogAttachments.
+ * Rebuilds the dialog's attachment list from dialogAttachments, then the
+ * image gallery. The gallery handles previews; list rows manage (download
+ * / remove) all attachments.
  */
 function renderDialogAttachments() {
   clearAttachmentThumbs();
@@ -1322,15 +1339,6 @@ function renderDialogAttachments() {
   for (const att of dialogAttachments) {
     const li = document.createElement('li');
     li.className = 'attachment-item';
-
-    if (att.type && att.type.startsWith('image/')) {
-      const img = document.createElement('img');
-      img.className = 'attachment-thumb';
-      img.src = URL.createObjectURL(att.blob);
-      img.alt = '';
-      attachmentThumbUrls.push(img.src);
-      li.appendChild(img);
-    }
 
     const nameEl = document.createElement('span');
     nameEl.className = 'attachment-name';
@@ -1363,7 +1371,68 @@ function renderDialogAttachments() {
     li.append(nameEl, sizeEl, delBtn);
     attachmentList.appendChild(li);
   }
+  renderGallery();
 }
+
+// Must match the .gallery-track gap in styles.css.
+const GALLERY_GAP = 8;
+
+/**
+ * Rebuilds the swipeable image gallery from dialogAttachments. Non-image
+ * attachments are skipped; the gallery is hidden entirely when there are
+ * no images. The scroll position is preserved across re-renders so adding
+ * or removing an attachment doesn't yank the user back to slide one.
+ */
+function renderGallery() {
+  const images = dialogAttachments.filter(a => a.type && a.type.startsWith('image/'));
+  if (images.length === 0) {
+    attachmentGallery.hidden = true;
+    galleryTrack.innerHTML = '';
+    return;
+  }
+  const savedScroll = galleryTrack.scrollLeft;
+  galleryTrack.innerHTML = '';
+  for (const att of images) {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(att.blob);
+    img.alt = att.name;
+    attachmentThumbUrls.push(img.src);
+    galleryTrack.appendChild(img);
+  }
+  attachmentGallery.hidden = false;
+  galleryTrack.scrollLeft = savedScroll;
+  updateGalleryState();
+}
+
+/**
+ * Syncs the gallery counter and prev/next visibility with the current
+ * scroll position. Runs on scroll (native swipe / trackpad / keyboard)
+ * and after each re-render.
+ */
+function updateGalleryState() {
+  const n = galleryTrack.children.length;
+  if (n === 0) return;
+  const step = galleryTrack.clientWidth + GALLERY_GAP;
+  const i = Math.min(n - 1, Math.max(0, Math.round(galleryTrack.scrollLeft / step)));
+  galleryCounter.textContent = `${i + 1} / ${n}`;
+  galleryPrev.hidden = i === 0;
+  galleryNext.hidden = i === n - 1;
+}
+
+// Gallery navigation: the arrows step exactly one slide. Native swipe
+// (mobile), trackpad/shift+scroll (desktop) and keyboard (the track is
+// focusable) all work directly on the track; the scroll listener keeps
+// the counter and arrows in sync with any of them.
+galleryTrack.addEventListener('scroll', updateGalleryState, { passive: true });
+function scrollGallery(dir) {
+  const reduceMotion = document.documentElement.classList.contains('reduce-motion');
+  galleryTrack.scrollBy({
+    left: dir * (galleryTrack.clientWidth + GALLERY_GAP),
+    behavior: reduceMotion ? 'auto' : 'smooth'
+  });
+}
+galleryPrev.addEventListener('click', () => scrollGallery(-1));
+galleryNext.addEventListener('click', () => scrollGallery(1));
 
 attachmentInput.addEventListener('change', () => {
   for (const file of attachmentInput.files) {

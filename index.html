@@ -204,6 +204,14 @@
             </div>
             <div class="dialog-section">
             <span class="dialog-section-title">Attachments</span>
+            <div class="attachment-gallery" id="attachment-gallery" hidden>
+                <div class="gallery-stage">
+                    <div class="gallery-track" id="gallery-track" tabindex="0" aria-label="Attachment images"></div>
+                    <button type="button" class="gallery-btn gallery-prev" id="gallery-prev" aria-label="Previous image">‹</button>
+                    <button type="button" class="gallery-btn gallery-next" id="gallery-next" aria-label="Next image">›</button>
+                </div>
+                <span class="gallery-counter" id="gallery-counter"></span>
+            </div>
             <input type="file" id="attachment-input" multiple>
             <ul id="attachment-list" class="attachment-list"></ul>
             </div>
