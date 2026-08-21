@@ -144,6 +144,9 @@ let dialogSubtasks = [];
 /** Working attachment list for the dialog. Each: {id, name, type, size, blob}. */
 let dialogAttachments = [];
 
+/** Object URLs created for image thumbnails; revoked on re-render/close. */
+let attachmentThumbUrls = [];
+
 /** @type {'notifications'|'data'|'personalization'|'trash'} */
 let activeSettingsTab = 'notifications';
 
@@ -1303,13 +1306,31 @@ function formatBytes(n) {
 }
 
 /**
+ * Revokes all thumbnail object URLs (called before re-render and on close).
+ */
+function clearAttachmentThumbs() {
+  for (const url of attachmentThumbUrls) URL.revokeObjectURL(url);
+  attachmentThumbUrls = [];
+}
+
+/**
  * Rebuilds the dialog's attachment list from dialogAttachments.
  */
 function renderDialogAttachments() {
+  clearAttachmentThumbs();
   attachmentList.innerHTML = '';
   for (const att of dialogAttachments) {
     const li = document.createElement('li');
     li.className = 'attachment-item';
+
+    if (att.type && att.type.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.className = 'attachment-thumb';
+      img.src = URL.createObjectURL(att.blob);
+      img.alt = '';
+      attachmentThumbUrls.push(img.src);
+      li.appendChild(img);
+    }
 
     const nameEl = document.createElement('span');
     nameEl.className = 'attachment-name';
@@ -1321,7 +1342,8 @@ function renderDialogAttachments() {
       a.href = url;
       a.download = att.name;
       a.click();
-      URL.revokeObjectURL(url);
+      // Defer revoke so the download has started in every browser
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     });
 
     const sizeEl = document.createElement('span');
@@ -1358,7 +1380,8 @@ attachmentInput.addEventListener('change', () => {
 });
 
 // Clear the working lists whenever the dialog closes (cancel, submit, ESC, backdrop)
-// so state never leaks into the next open.
+// so state never leaks into the next open. renderDialogAttachments() also
+// revokes any thumbnail object URLs.
 dialog.addEventListener('close', () => {
   dialogSubtasks = [];
   dialogAttachments = [];

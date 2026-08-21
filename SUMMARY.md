@@ -94,7 +94,7 @@ permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
 - **Edit tasks** by clicking the text area (same dialog, `editingTodoId` tracks mode)
 - **Notes** — free-form textarea in the dialog; a 📝 badge marks tasks with notes in the list (hover shows the text)
 - **Subtasks** — inline checklist in the dialog (add/check/remove); an `N/M` progress badge shows in the list
-- **Attachments** — file picker in the dialog; blobs stored on the todo, `N` count badge (📎) in the list, click a name to download
+- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a thumbnail preview); blobs stored on the todo, `N` count badge (📎) in the list, click a name to download
 - **Complete tasks** by clicking the checkbox — moves from active to completed
 - **Delete tasks** (soft delete) — moves to trash, not permanently removed
 - **Restore from trash** — moves back to active or completed depending on prior state
