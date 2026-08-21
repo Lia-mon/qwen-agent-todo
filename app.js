@@ -1710,11 +1710,7 @@ function toggleNotifications(e) {
 }
 
 function toggleMotion(e) {
-  if (e.target.checked) {
-    document.documentElement.style.setProperty('--reduce-motion', 'all');
-  } else {
-    document.documentElement.style.removeProperty('--reduce-motion');
-  }
+  document.documentElement.classList.toggle('reduce-motion', e.target.checked);
 }
 
 // ── Service Worker Registration ────────────────────────────────

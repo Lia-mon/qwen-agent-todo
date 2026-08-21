@@ -48,7 +48,6 @@ input, select, textarea {
 
   --color-primary: #3498db;
   --color-primary-hover: #2980b9;
-  --color-primary-light: rgba(52, 152, 219, 0.3);
 
   --color-border: #ddd;
   --color-border-light: #eee;
@@ -56,13 +55,11 @@ input, select, textarea {
 
   --color-danger: #e74c3c;
   --color-danger-hover: #c0392b;
-  --color-danger-light: #fdecea;
 
   --color-success: #2ecc71;
   --color-success-hover: #27ae60;
 
   --color-warning: #f39c12;
-  --color-warning-light: #fef5e7;
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: #fdecea;
@@ -89,21 +86,18 @@ input, select, textarea {
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
-  --radius-2xl: 24px;
 
   --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.2);
   --shadow-btn: 0 2px 8px rgba(52, 152, 219, 0.3);
 
   /* ── Transitions ──────────────────────── */
-  --transition-fast: 0.2s;
   --transition-base: 0.2s;
 
   /* ── Spacing ──────────────────────────── */
   --gap-xs: 4px;
   --gap-sm: 8px;
   --gap-md: 12px;
-  --gap-lg: 16px;
 }
 
 /* ═══════════════════════════════════════════
@@ -187,9 +181,8 @@ body {
   border-bottom: 1px solid var(--color-border-light);
 }
 
-#settings-deleted-list
-{
-    list-style:none;
+#settings-deleted-list {
+  list-style: none;
 }
 
 .settings-close {
@@ -202,7 +195,7 @@ body {
   color: var(--color-text-muted);
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
+  transition: background var(--transition-base);
 }
 
 .settings-close:hover {
@@ -333,12 +326,6 @@ body {
 }
 
 .theme-btn {
-  flex: 1 1 auto;
-  min-width: 80px;
-  text-align: center;
-}
-
-.theme-btn {
   flex: 1;
   padding: 8px 16px;
   font-size: 0.85rem;
@@ -349,6 +336,7 @@ body {
   cursor: pointer;
   transition: all var(--transition-base);
   color: var(--color-text-secondary);
+  text-align: center;
 }
 
 .theme-btn:hover {
@@ -898,7 +886,7 @@ body {
 }
 
 .todo-item .timestamp.created {
-  color: #999;
+  color: var(--color-text-tertiary);
 }
 
 .todo-item .timestamp.completed {
@@ -960,6 +948,13 @@ body {
 .todo-item:hover .delete-btn {
   opacity: 1;
   transform: scale(1.5);
+}
+
+/* Touch devices have no hover — keep delete always visible there */
+@media (hover: none) {
+  .todo-item .delete-btn {
+    opacity: 1;
+  }
 }
 
 .empty-state {
@@ -1169,16 +1164,10 @@ body {
 
 /* ── Reduced Motion ─────────────────────────────────────────── */
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-:root {
-  --reduce-motion: none;
+/* Manual "Reduce Motion" toggle — JS adds .reduce-motion to <html> */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

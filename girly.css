@@ -18,7 +18,6 @@
 
   --color-primary: #d63384;
   --color-primary-hover: #c21e6b;
-  --color-primary-light: rgba(214, 51, 132, 0.3);
 
   --color-border: #ffb6c1;
   --color-border-light: rgba(255, 182, 193, 0.4);
@@ -26,13 +25,11 @@
 
   --color-danger: #8a1040;
   --color-danger-hover: #701038;
-  --color-danger-light: #ffe4e9;
 
   --color-success: #2a7a4a;
   --color-success-hover: #1e6a3a;
 
   --color-warning: #f39c12;
-  --color-warning-light: #fff5e6;
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: linear-gradient(145deg, #ffe4e9, #ffd6e0);
@@ -59,21 +56,18 @@
   --radius-md: 12px;
   --radius-lg: 14px;
   --radius-xl: 24px;
-  --radius-2xl: 24px;
 
   --shadow-sm: 0 8px 32px rgba(255, 154, 162, 0.15), 0 2px 8px rgba(221, 160, 221, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --shadow-md: 0 12px 40px rgba(255, 154, 162, 0.25), 0 4px 16px rgba(221, 160, 221, 0.15);
   --shadow-btn: 0 4px 16px rgba(214, 51, 132, 0.3), 0 2px 8px rgba(255, 182, 193, 0.2);
 
   /* ── Transitions ──────────────────────── */
-  --transition-fast: 0.3s;
   --transition-base: 0.3s ease;
 
   /* ── Spacing ──────────────────────────── */
   --gap-xs: 6px;
   --gap-sm: 10px;
   --gap-md: 14px;
-  --gap-lg: 18px;
 }
 
 /* ── Girly Font Family ──────────────────────────────────────── */
@@ -701,23 +695,3 @@ body::before {
   font-weight: 500;
 }
 
-/* ── Reduced Motion ─────────────────────────────────────────── */
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-:root {
-  --reduce-motion: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation: none !important;
-    transition: none !important;
-  }
-}

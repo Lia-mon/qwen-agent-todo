@@ -14,7 +14,6 @@
 
   --color-primary: #8b0000;
   --color-primary-hover: #a52a2a;
-  --color-primary-light: rgba(139, 0, 0, 0.4);
 
   --color-border: #2a2a2a;
   --color-border-light: #222222;
@@ -22,13 +21,11 @@
 
   --color-danger: #cc0000;
   --color-danger-hover: #990000;
-  --color-danger-light: rgba(204, 0, 0, 0.2);
 
   --color-success: #2d5a2d;
   --color-success-hover: #3d7a3d;
 
   --color-warning: #8b6914;
-  --color-warning-light: rgba(139, 105, 20, 0.2);
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: rgba(204, 0, 0, 0.25);
@@ -55,14 +52,12 @@
   --radius-md: 0px;
   --radius-lg: 0px;
   --radius-xl: 0px;
-  --radius-2xl: 0px;
 
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-btn: none;
 
   /* ── Transitions ──────────────────────── */
-  --transition-fast: 0.3s;
   --transition-base: 0.3s;
 }
 
