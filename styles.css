@@ -45,6 +45,13 @@ input, select, textarea {
   --color-text-muted: #888;
   --color-text-faint: #aaa;
   --color-text-tertiary: #999;
+  --color-title: #555;
+  --color-hover: #e0e0e0;
+  --color-toggle-off: #ccc;
+  --color-toggle-knob: #fff;
+  --color-checkbox-border: #ccc;
+  --color-backdrop: rgba(0, 0, 0, 0.4);
+  --color-on-accent: #fff;
 
   --color-primary: #3498db;
   --color-primary-hover: #2980b9;
@@ -140,7 +147,7 @@ body {
 
 .panel-title {
   font-size: 1.1rem;
-  color: #555;
+  color: var(--color-title);
   margin-bottom: 16px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -169,7 +176,7 @@ body {
 }
 
 #settings-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-backdrop);
   backdrop-filter: blur(4px);
 }
 
@@ -308,7 +315,7 @@ body {
 
 .settings-action-btn.danger:hover {
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .settings-action-btn:focus-visible {
@@ -347,7 +354,7 @@ body {
 .theme-btn.active {
   border-color: var(--color-primary);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .theme-btn:focus-visible {
@@ -377,7 +384,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #ccc;
+  background: var(--color-toggle-off);
   border-radius: 24px;
   transition: background var(--transition-base);
 }
@@ -389,7 +396,7 @@ body {
   width: 18px;
   left: 3px;
   bottom: 3px;
-  background: white;
+  background: var(--color-toggle-knob);
   border-radius: 50%;
   transition: transform var(--transition-base);
 }
@@ -424,7 +431,7 @@ body {
 }
 
 .settings-btn:hover {
-  background: #e0e0e0;
+  background: var(--color-hover);
 }
 
 .settings-btn:focus-visible {
@@ -480,7 +487,7 @@ body {
 }
 
 #add-task-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-backdrop);
   backdrop-filter: blur(4px);
 }
 
@@ -493,7 +500,7 @@ body {
 
 .dialog-title {
   font-size: 1.1rem;
-  color: #555;
+  color: var(--color-title);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -517,7 +524,7 @@ body {
   padding: 10px 20px;
   font-size: 1rem;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -540,7 +547,7 @@ body {
   padding: 10px 20px;
   font-size: 1rem;
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -564,7 +571,7 @@ body {
 
 .dialog-delete:hover {
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .dialog-fields {
@@ -639,7 +646,7 @@ body {
   border-radius: var(--radius-lg);
   border: none;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
   font-size: 1.4rem;
   font-weight: 300;
   cursor: pointer;
@@ -682,12 +689,12 @@ body {
 }
 
 .status-btn:hover {
-  background: #e0e0e0;
+  background: var(--color-hover);
 }
 
 .status-btn.active {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .status-btn:focus-visible {
@@ -715,12 +722,12 @@ body {
 }
 
 .filter-toggle:hover {
-  background: #e0e0e0;
+  background: var(--color-hover);
 }
 
 .filter-toggle.active {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .filters {
@@ -777,7 +784,7 @@ body {
 .filter-btn.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .filter-btn:focus-visible {
@@ -810,7 +817,7 @@ body {
 .todo-item .checkbox {
   width: 22px;
   height: 22px;
-  border: 2px solid #ccc;
+  border: 2px solid var(--color-checkbox-border);
   border-radius: 50%;
   cursor: pointer;
   flex-shrink: 0;
@@ -828,7 +835,7 @@ body {
   content: '';
   width: 6px;
   height: 10px;
-  border: solid #fff;
+  border: solid var(--color-on-accent);
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg) translate(-1px, -1px);
 }
@@ -918,7 +925,7 @@ body {
 
 .restore-btn {
   background: var(--color-success);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .restore-btn:hover {
@@ -927,7 +934,7 @@ body {
 
 .perm-delete-btn {
   background: var(--color-danger);
-  color: #fff;
+  color: var(--color-on-accent);
 }
 
 .perm-delete-btn:hover {
@@ -1091,7 +1098,7 @@ body {
 }
 
 #profile-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-backdrop);
   backdrop-filter: blur(4px);
 }
 

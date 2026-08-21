@@ -11,7 +11,7 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 | File | Purpose |
 |------|---------|
 | `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, and add/edit dialog. Loads all CSS themes and the JS bundle. |
-| `app.js` | All application logic (~1580 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, data import/export. |
+| `app.js` | All application logic (~1860 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, data import/export. |
 | `styles.css` | Base styles and CSS custom properties (colors, radii, transitions, spacing). Defines the "Classic" theme. Includes base layout, components, badges, trash actions, pagination, and responsive breakpoints. |
 | `girly.css` | Pink/pastel theme override — rounded corners, soft shadows, pink accent colors. |
 | `suave.css` | Dark navy theme — sharp corners, no shadows, cool blue/red palette, Inter font. |
@@ -141,6 +141,8 @@ Five tabs in a `<dialog>` modal:
 ### Theming
 
 Five themes applied by enabling/disabling separate CSS files. Theme is persisted in `localStorage`. Each theme defines its own `:root` CSS custom properties (colors, radii, shadows, transitions) and overrides component styles. Theme color meta tag updates to match.
+
+The base `styles.css` is fully tokenized: every color lives in `:root` as a custom property (including `--color-title`, `--color-hover`, `--color-toggle-off`, `--color-toggle-knob`, `--color-checkbox-border`, `--color-backdrop`, `--color-on-accent`). Component rules never hardcode a color, so themes re-skin by overriding tokens in their `:root` block plus a handful of structural overrides (fonts, radii, decorative icons, gradients). Theme files contain only rules that genuinely differ from the base — redundant copies of base declarations have been pruned.
 
 ### Notifications
 

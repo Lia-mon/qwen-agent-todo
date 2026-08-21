@@ -18,6 +18,9 @@
   --color-border: #2a2a2a;
   --color-border-light: #222222;
   --color-border-lighter: #1f1f1f;
+  --color-hover: var(--color-border-light);
+  --color-toggle-off: var(--color-border-light);
+  --color-backdrop: rgba(0, 0, 0, 0.85);
 
   --color-danger: #cc0000;
   --color-danger-hover: #990000;
@@ -121,17 +124,9 @@ body::before {
 }
 
 #settings-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.85);
   backdrop-filter: none;
 }
 
-#settings-dialog:open {
-  padding: 15px;
-}
-
-.settings-header {
-  border-bottom-width: 1px;
-}
 
 .settings-tabs {
   border-bottom-width: 1px;
@@ -162,14 +157,6 @@ body::before {
   padding: 12px 20px;
 }
 
-.setting-row {
-  border-bottom-width: 1px;
-}
-
-.setting-hint {
-  font-style: normal;
-  font-family: inherit;
-}
 
 .settings-action-btn {
   background: var(--color-border-lighter);
@@ -183,10 +170,6 @@ body::before {
 .settings-action-btn:hover {
   background: var(--color-border-light);
   color: var(--color-text);
-}
-
-.settings-action-btn.danger {
-  color: var(--color-danger);
 }
 
 .settings-action-btn.danger:hover {
@@ -214,7 +197,6 @@ body::before {
 }
 
 .toggle-slider {
-  background: var(--color-border-light);
   border-radius: 0;
 }
 
@@ -222,26 +204,12 @@ body::before {
   border-radius: 0;
 }
 
-.toggle input:checked + .toggle-slider {
-  background: var(--color-primary);
-}
-
 .settings-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
   border-radius: 0;
-  transition: background var(--transition-base);
 }
 
 .settings-btn::before {
   content: '⚜️';
-}
-
-.settings-btn:hover {
-  background: var(--color-border-light);
-  transform: none;
 }
 
 .add-btn {
@@ -263,33 +231,12 @@ body::before {
   letter-spacing: 0.5px;
 }
 
-.status-btn:hover {
-  background: var(--color-border-light);
-}
-
-.status-btn.active {
-  background: var(--color-primary);
-}
-
 .filter-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
   border-radius: 0;
 }
 
 .filter-toggle::before {
   content: '🕯️';
-}
-
-.filter-toggle:hover {
-  background: var(--color-border-light);
-  transform: none;
-}
-
-.filter-toggle.active {
-  background: var(--color-primary);
 }
 
 .filter-btn {
@@ -304,10 +251,6 @@ body::before {
   background: var(--color-border-lighter);
 }
 
-.filter-btn.active {
-  background: var(--color-primary);
-}
-
 .filters {
   border-bottom-width: 1px;
 }
@@ -315,10 +258,6 @@ body::before {
 .filter-group-label {
   font-weight: 700;
   letter-spacing: 1px;
-}
-
-.todo-item {
-  border-bottom-width: 1px;
 }
 
 .todo-item .checkbox {
@@ -343,10 +282,6 @@ body::before {
   border-radius: 0;
   font-weight: 700;
   letter-spacing: 1px;
-  font-family: inherit;
-}
-
-.todo-item .timestamps {
   font-family: inherit;
 }
 
@@ -377,17 +312,9 @@ body::before {
   font-weight: 700;
 }
 
-.restore-btn:hover {
-  transform: none;
-}
-
 .perm-delete-btn {
   border-radius: 0;
   font-weight: 700;
-}
-
-.perm-delete-btn:hover {
-  transform: none;
 }
 
 .todo-item .delete-btn {
@@ -423,7 +350,6 @@ body::before {
 }
 
 #add-task-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.85);
   backdrop-filter: none;
 }
 
@@ -446,11 +372,6 @@ body::before {
   font-family: inherit;
 }
 
-#todo-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: none;
-}
-
 #todo-input::placeholder {
   color: var(--color-text-muted);
   font-style: normal;
@@ -463,28 +384,16 @@ body::before {
   font-family: inherit;
 }
 
-.dialog-submit:hover {
-  transform: none;
-}
-
 .dialog-cancel {
   border-radius: 0;
   font-weight: 700;
   font-family: inherit;
 }
 
-.dialog-cancel:hover {
-  transform: none;
-}
-
 .dialog-delete {
   border-radius: 0;
   font-weight: 700;
   font-family: inherit;
-}
-
-.dialog-delete:hover {
-  transform: none;
 }
 
 .dialog-fields {
@@ -506,13 +415,6 @@ body::before {
   font-family: inherit;
 }
 
-.dialog-fields select:focus,
-.dialog-fields input[type="datetime-local"]:focus,
-#todo-form > label input[type="datetime-local"]:focus {
-  border-color: var(--color-primary);
-  box-shadow: none;
-}
-
 .page-btn {
   border-radius: 0;
   background: var(--color-border-lighter);
@@ -525,14 +427,4 @@ body::before {
   transform: none;
 }
 
-.page-btn:disabled {
-  transform: none;
-}
 
-.page-info {
-  font-family: inherit;
-}
-
-.pagination {
-  border-top-width: 1px;
-}
