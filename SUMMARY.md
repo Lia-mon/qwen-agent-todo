@@ -189,3 +189,4 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 2. **5-minute `checkTasks()` interval disabled** — Runs once on init only. Repeatable task processing and urgency timer updates are paused until re-enabled.
 3. **Trash ignores filters** — The settings trash shows all deleted items regardless of active filter state.
 4. **Single dialog for add and edit** — `#add-task-dialog` is reused; `editingTodoId` distinguishes the mode.
+5. **iOS zoom backstop is scoped, not global** — each form control declares `font-size: 1rem` explicitly; a `@media (pointer: coarse)` rule forces `16px !important` on touch devices only, where mobile browsers auto-zoom on focus of sub-16px inputs. Desktop rendering is governed purely by the explicit declarations.

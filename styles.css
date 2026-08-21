@@ -21,9 +21,15 @@ body {
   }
 }
 
-/* Fix form inputs on iOS */
-input, select, textarea {
-  font-size: 16px !important;
+/* Fix form inputs on iOS/touch: mobile browsers auto-zoom when focusing an
+   input rendered under 16px. Inputs declare font-size: 1rem individually;
+   this backstop keeps the 16px guarantee on touch devices even if a future
+   input inherits a smaller size. 16px (not rem) because the zoom threshold
+   is absolute. */
+@media (pointer: coarse) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 /* Smooth scrolling for iOS */
@@ -597,10 +603,9 @@ body {
   flex: 1;
 }
 
-.dialog-fields select,
-.dialog-fields input[type="datetime-local"] {
+.dialog-fields select {
   padding: 6px 8px;
-  font-size: 0.9rem;
+  font-size: 1rem;
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   outline: none;
@@ -631,7 +636,7 @@ body {
 
 #todo-form > label input[type="datetime-local"] {
   padding: 6px 8px;
-  font-size: 0.9rem;
+  font-size: 1rem;
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   outline: none;
@@ -646,6 +651,7 @@ body {
 
 #todo-form > label textarea {
   padding: 6px 8px;
+  font-size: 1rem;
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   outline: none;
@@ -735,6 +741,7 @@ body {
 .subtask-add-row input {
   flex: 1;
   padding: 6px 8px;
+  font-size: 1rem;
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   outline: none;
@@ -810,6 +817,7 @@ body {
   display: block;
   width: 100%;
   padding: 6px;
+  font-size: 1rem;
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
