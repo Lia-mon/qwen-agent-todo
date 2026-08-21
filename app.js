@@ -53,6 +53,12 @@ const subtaskInput = document.getElementById('subtask-input');
 /** @type {HTMLButtonElement} */
 const subtaskAddBtn = document.getElementById('subtask-add-btn');
 
+/** @type {HTMLInputElement} */
+const attachmentInput = document.getElementById('attachment-input');
+
+/** @type {HTMLUListElement} */
+const attachmentList = document.getElementById('attachment-list');
+
 /** @type {HTMLElement} */
 const todoList = document.getElementById('todo-list');
 if (!todoList) console.error('todoList is null!');
@@ -131,6 +137,9 @@ let editingTodoId = null;
 
 /** Working subtask list for the dialog. Deep-copied into the todo on save. */
 let dialogSubtasks = [];
+
+/** Working attachment list for the dialog. Each: {id, name, type, size, blob}. */
+let dialogAttachments = [];
 
 /** @type {'notifications'|'data'|'personalization'|'trash'} */
 let activeSettingsTab = 'notifications';
@@ -873,6 +882,14 @@ function buildItem(todo, view) {
       meta.appendChild(stBadge);
     }
 
+    if (todo.attachments && todo.attachments.length) {
+      const attBadge = document.createElement('span');
+      attBadge.className = 'badge attachments';
+      attBadge.textContent = `📎 ${todo.attachments.length}`;
+      attBadge.title = todo.attachments.map(a => a.name).join(', ');
+      meta.appendChild(attBadge);
+    }
+
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
     li.append(checkbox, textArea);
@@ -1267,11 +1284,82 @@ subtaskInput.addEventListener('keydown', e => {
   }
 });
 
+// ── Dialog attachments ─────────────────────────────────────────
+
+/**
+ * Formats a byte count as a short human-readable string.
+ * @param {number} n
+ * @returns {string}
+ */
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+/**
+ * Rebuilds the dialog's attachment list from dialogAttachments.
+ */
+function renderDialogAttachments() {
+  attachmentList.innerHTML = '';
+  for (const att of dialogAttachments) {
+    const li = document.createElement('li');
+    li.className = 'attachment-item';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'attachment-name';
+    nameEl.textContent = att.name;
+    nameEl.title = 'Download';
+    nameEl.addEventListener('click', () => {
+      const url = URL.createObjectURL(att.blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    const sizeEl = document.createElement('span');
+    sizeEl.className = 'attachment-size';
+    sizeEl.textContent = formatBytes(att.size);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'subtask-delete';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Remove attachment';
+    delBtn.addEventListener('click', () => {
+      dialogAttachments = dialogAttachments.filter(a => a.id !== att.id);
+      renderDialogAttachments();
+    });
+
+    li.append(nameEl, sizeEl, delBtn);
+    attachmentList.appendChild(li);
+  }
+}
+
+attachmentInput.addEventListener('change', () => {
+  for (const file of attachmentInput.files) {
+    dialogAttachments.push({
+      id: newId(),
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      blob: new Blob([file], { type: file.type })
+    });
+  }
+  attachmentInput.value = '';
+  renderDialogAttachments();
+});
+
 // Clear the working lists whenever the dialog closes (cancel, submit, ESC, backdrop)
 // so state never leaks into the next open.
 dialog.addEventListener('close', () => {
   dialogSubtasks = [];
+  dialogAttachments = [];
   renderDialogSubtasks();
+  renderDialogAttachments();
 });
 
 function resetDialog() {
@@ -1302,6 +1390,8 @@ function openEditDialog(todo) {
   notesInput.value = todo.notes || '';
   dialogSubtasks = (todo.subtasks || []).map(s => ({ ...s }));
   renderDialogSubtasks();
+  dialogAttachments = (todo.attachments || []).map(a => ({ ...a }));
+  renderDialogAttachments();
 
   dialogTitle.textContent = 'Edit Task';
   dialogSubmit.textContent = 'Save';
@@ -1335,7 +1425,7 @@ function msToDatetimeLocal(timestamp) {
  * @param {string} duration
  * @returns {Promise<void>}
  */
-async function addTodo(text, repeat, importance, deadlineStr, duration, notes, subtasks) {
+async function addTodo(text, repeat, importance, deadlineStr, duration, notes, subtasks, attachments) {
   const now = Date.now();
   const deadlineMs = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   const todo = {
@@ -1347,6 +1437,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration, notes, s
     duration,
     notes,
     subtasks: (subtasks || []).map(s => ({ ...s })),
+    attachments: (attachments || []).map(a => ({ ...a })),
     completed: 0,
     completedAt: null,
     deleted: 0,
@@ -1374,7 +1465,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration, notes, s
  * @param {string} duration - New duration string.
  * @returns {Promise<void>}
  */
-async function updateTodo(id, text, repeat, importance, deadlineStr, duration, notes, subtasks) {
+async function updateTodo(id, text, repeat, importance, deadlineStr, duration, notes, subtasks, attachments) {
   // Search in active first, then completed
   const todo = active.find(t => t.id === id) || completed.find(t => t.id === id);
   if (!todo) return;
@@ -1386,6 +1477,7 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
   todo.deadline = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
   todo.notes = notes;
   todo.subtasks = (subtasks || []).map(s => ({ ...s }));
+  todo.attachments = (attachments || []).map(a => ({ ...a }));
 
   await dbPut(todo);
   updateTodoInDOM(todo);
@@ -1601,7 +1693,8 @@ todoForm.addEventListener('submit', async e => {
         deadlineInput.value,
         durationSelect.value,
         notesInput.value.trim(),
-        dialogSubtasks
+        dialogSubtasks,
+        dialogAttachments
       );
       resetDialog();
       dialog.close();
@@ -1613,7 +1706,8 @@ todoForm.addEventListener('submit', async e => {
         deadlineInput.value,
         durationSelect.value,
         notesInput.value.trim(),
-        dialogSubtasks
+        dialogSubtasks,
+        dialogAttachments
       );
       todoInput.value = '';
       notesInput.value = '';
@@ -1728,13 +1822,86 @@ settingsDeletedList.addEventListener('click', (e) => {
 
 // ── Settings Panel Handlers ────────────────────────────────────
 
+/**
+ * Encodes an ArrayBuffer as base64 in chunks (avoids call-stack limits on large files).
+ * @param {ArrayBuffer} buf
+ * @returns {string}
+ */
+function bufferToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+/**
+ * Converts a todo's attachments (Blobs) into JSON-safe base64 data URLs.
+ * @param {Object[]} attachments
+ * @returns {Promise<Object[]>}
+ */
+async function serializeAttachments(attachments) {
+  const out = [];
+  for (const att of attachments || []) {
+    if (!att || !att.blob) continue;
+    const buf = await att.blob.arrayBuffer();
+    out.push({
+      id: att.id,
+      name: att.name,
+      type: att.type,
+      size: att.size,
+      data: `data:${att.type || 'application/octet-stream'};base64,${bufferToBase64(buf)}`
+    });
+  }
+  return out;
+}
+
+/**
+ * Restores base64 data-URL attachments back into Blob objects.
+ * @param {Object[]} attachments
+ * @returns {Promise<Object[]>}
+ */
+async function deserializeAttachments(attachments) {
+  const out = [];
+  for (const att of attachments || []) {
+    if (!att || typeof att.data !== 'string') continue;
+    try {
+      const blob = await fetch(att.data).then(r => r.blob());
+      out.push({
+        id: att.id || newId(),
+        name: att.name,
+        type: att.type || blob.type,
+        size: blob.size,
+        blob
+      });
+    } catch (err) {
+      console.warn('Failed to restore attachment:', att.name, err);
+    }
+  }
+  return out;
+}
+
+/**
+ * Maps a todo array to export-safe copies with serialized attachments.
+ * @param {Object[]} todos
+ * @returns {Promise<Object[]>}
+ */
+async function prepareExportTodos(todos) {
+  return Promise.all((todos || []).map(async todo => ({
+    ...todo,
+    attachments: await serializeAttachments(todo.attachments)
+  })));
+}
+
 async function exportData() {
   try {
     const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet(currentProfileId);
     const data = {
-      active: activeArr,
-      completed: completedArr,
-      deleted: deletedArr,
+      active: await prepareExportTodos(activeArr),
+      completed: await prepareExportTodos(completedArr),
+      deleted: await prepareExportTodos(deletedArr),
       exportedAt: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1771,20 +1938,29 @@ async function importData(e) {
       // Clear the current profile's existing tasks
       await dbDeleteProfileTodos(currentProfileId);
 
-      // Write imported tasks (strip IDs so auto-increment assigns fresh ones)
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const importCounts = [];
+      // Restore attachments to Blobs before writing (async, so outside the transaction)
+      const prepared = [];
       for (const arr of [data.active, data.completed, data.deleted]) {
         if (Array.isArray(arr)) {
           for (const todo of arr) {
             const { id, ...todoWithoutId } = todo;
-            const req = store.add({ ...todoWithoutId, profileId: currentProfileId });
-            importCounts.push(req);
-            req.onerror = () => console.warn('Failed to import todo:', req.error);
+            prepared.push({
+              ...todoWithoutId,
+              profileId: currentProfileId,
+              attachments: await deserializeAttachments(todo.attachments)
+            });
           }
         }
       }
+
+      // Write imported tasks (strip IDs so auto-increment assigns fresh ones)
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const importCounts = prepared.map(todo => {
+        const req = store.add(todo);
+        req.onerror = () => console.warn('Failed to import todo:', req.error);
+        return req;
+      });
       await new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
