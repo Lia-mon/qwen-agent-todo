@@ -78,6 +78,7 @@
         <button class="settings-tab" data-tab="data">Data Management</button>
         <button class="settings-tab" data-tab="personalization">Personalization</button>
         <button class="settings-tab" data-tab="trash">Trash</button>
+        <button class="settings-tab" data-tab="profiles">Profiles</button>
         </nav>
         <div class="settings-content">
         <div id="settings-notifications" class="settings-tab-content active">
@@ -128,10 +129,24 @@
         <div id="settings-trash" class="settings-tab-content">
             <ul id="settings-deleted-list"></ul>
         </div>
+        <div id="settings-profiles" class="settings-tab-content">
+            <button id="profile-add-btn" class="settings-action-btn" style="margin-bottom: 12px;">+ Add Profile</button>
+            <ul id="settings-profiles-list"></ul>
+        </div>
         </div>
         <footer id="settings-footer" class="settings-footer">
         <div id="settings-pagination" class="pagination"></div>
         </footer>
+    </dialog>
+
+    <!-- ── Profile Dialog ──────────────────────────────────────── -->
+    <dialog id="profile-dialog" aria-modal="true">
+        <h3 class="dialog-title" id="profile-dialog-title">New Profile</h3>
+        <input type="text" id="profile-name-input" placeholder="Profile name" required>
+        <div class="dialog-buttons">
+            <button type="button" id="profile-cancel-btn" class="dialog-cancel">Cancel</button>
+            <button type="button" id="profile-save-btn" class="dialog-submit">Add</button>
+        </div>
     </dialog>
 
     <!-- ── Add Task Dialog ──────────────────────────────────────── -->

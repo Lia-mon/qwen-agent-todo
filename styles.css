@@ -187,6 +187,11 @@ body {
   border-bottom: 1px solid var(--color-border-light);
 }
 
+#settings-deleted-list
+{
+    list-style:none;
+}
+
 .settings-close {
   width: 40px;
   height: 40px;
@@ -1074,6 +1079,82 @@ body {
   color: var(--color-text-muted);
   min-width: 100px;
   text-align: center;
+}
+
+/* ── Profile Dialog ─────────────────────────────────────────── */
+
+#profile-dialog {
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: 0;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  margin: auto;
+}
+
+#profile-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+#profile-dialog h3 {
+  padding: 20px 24px 0;
+  margin: 0;
+}
+
+#profile-name-input {
+  margin: 12px 24px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-base);
+  width: calc(100% - 48px);
+}
+
+#profile-name-input:focus {
+  border-color: var(--color-primary);
+}
+
+#profile-dialog .dialog-buttons {
+  padding: 0 24px 20px;
+}
+
+/* ── Profiles List ──────────────────────────────────────────── */
+
+#settings-profiles-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border-lighter);
+  gap: var(--gap-sm);
+}
+
+.profile-item:last-child {
+  border-bottom: none;
+}
+
+.profile-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.profile-actions {
+  display: flex;
+  gap: var(--gap-sm);
+  flex-shrink: 0;
 }
 
 /* ── Reduced Motion ─────────────────────────────────────────── */

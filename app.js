@@ -95,6 +95,9 @@ const DB_VERSION = 1;
 /** @type {string} */
 const STORE_NAME = 'todos';
 
+/** @type {string} */
+const PROFILES_STORE_NAME = 'profiles';
+
 /** @type {IDBDatabase | null} */
 let db = null;
 
@@ -121,13 +124,6 @@ let completedPage = 1;
 
 /** @type {number} */
 let trashPage = 1;
-
-/**
- * DB Masks
- */
-const DB_GET_ACTIVE = 1;
-const DB_GET_COMPLETED = 2;
-const DB_GET_DELETED = 4;
 
 /**
  * Inserts `item` into a sorted array at the correct position using binary search.
@@ -158,6 +154,9 @@ function createStore(database) {
   store.createIndex('completed', 'completed', { unique: false });
   store.createIndex('createdAt', 'createdAt', { unique: false });
   store.createIndex('completedAt', 'completedAt', { unique: false });
+
+  const profilesStore = database.createObjectStore(PROFILES_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+  profilesStore.createIndex('name', 'name', { unique: false });
 }
 
 /**
@@ -231,36 +230,173 @@ function dbDelete(id) {
 }
 
 /**
- * Retrieves todos from the store, filtered by the given bitmask.
- * @param {number} mask - Bitmask: DB_GET_ACTIVE (1), DB_GET_COMPLETED (2), DB_GET_DELETED (4)
- * @returns {Promise<Todo[][]>}
+ * Retrieves all todos from the store, split into active/completed/deleted arrays.
+ * @returns {Promise<{active: Todo[], completed: Todo[], deleted: Todo[]}>}
  */
-function dbGet(mask) {
+function dbGet() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.openCursor();
-    const active = [];
-    const completed = [];
-    const deleted = [];
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-      if (cursor) {
-        const todo = cursor.value;
-        if ((mask & DB_GET_ACTIVE) && todo.deleted === 0 && todo.completed === 0) {
-          active.push(todo);
-        } else if ((mask & DB_GET_COMPLETED) && todo.deleted === 0 && todo.completed === 1) {
-          completed.push(todo);
-        } else if ((mask & DB_GET_DELETED) && todo.deleted === 1) {
-          deleted.push(todo);
-        }
-        cursor.continue();
-      } else {
-        resolve([active, completed, deleted]);
+    const request = tx.objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => {
+      const all = request.result;
+      const active = [], completed = [], deleted = [];
+      for (const todo of all) {
+        if (todo.deleted === 1) deleted.push(todo);
+        else if (todo.completed === 1) completed.push(todo);
+        else active.push(todo);
       }
+      resolve({ active, completed, deleted });
     };
     request.onerror = () => reject(request.error);
   });
+}
+
+/**
+ * Retrieves all profiles from the store.
+ * @returns {Promise<{id: number, name: string}[]>}
+ */
+function dbGetProfiles() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PROFILES_STORE_NAME, 'readonly');
+    const request = tx.objectStore(PROFILES_STORE_NAME).getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Saves a profile (insert or update).
+ * @param {{id?: number, name: string}} profile
+ * @returns {Promise<number>}
+ */
+function dbPutProfile(profile) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PROFILES_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(PROFILES_STORE_NAME);
+    const obj = profile.id ? profile : { name: profile.name };
+    const request = profile.id ? store.put(obj) : store.add(obj);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Deletes a profile by ID.
+ * @param {number} id
+ * @returns {Promise<void>}
+ */
+function dbDeleteProfile(id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PROFILES_STORE_NAME, 'readwrite');
+    tx.objectStore(PROFILES_STORE_NAME).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/** @type {number | null} */
+let editingProfileId = null;
+
+/**
+ * Renders the profiles list in the settings panel.
+ */
+async function renderProfiles() {
+  const list = document.getElementById('settings-profiles-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const profiles = await dbGetProfiles();
+
+  if (profiles.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'empty-state';
+    empty.textContent = 'No profiles yet.';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const profile of profiles) {
+    const li = document.createElement('li');
+    li.className = 'profile-item';
+    li.dataset.id = profile.id;
+    li.innerHTML = `
+      <span class="profile-name">${escapeHtml(profile.name)}</span>
+      <div class="profile-actions">
+        <button class="settings-action-btn profile-edit-btn" data-action="edit" data-id="${profile.id}">Edit</button>
+        <button class="settings-action-btn danger profile-delete-btn" data-action="delete" data-id="${profile.id}">Delete</button>
+      </div>
+    `;
+    list.appendChild(li);
+  }
+}
+
+/**
+ * Opens the profile dialog for adding or editing.
+ * @param {number|null} id - Profile ID to edit, or null for new
+ */
+function openProfileDialog(id = null) {
+  editingProfileId = id;
+  const dialog = document.getElementById('profile-dialog');
+  const title = document.getElementById('profile-dialog-title');
+  const input = document.getElementById('profile-name-input');
+  const saveBtn = document.getElementById('profile-save-btn');
+
+  if (id !== null) {
+    dbGetProfiles().then(profiles => {
+      const profile = profiles.find(p => p.id === id);
+      if (profile) {
+        title.textContent = 'Edit Profile';
+        input.value = profile.name;
+        saveBtn.textContent = 'Save';
+      }
+    });
+  } else {
+    title.textContent = 'New Profile';
+    input.value = '';
+    saveBtn.textContent = 'Add';
+  }
+  dialog.showModal();
+}
+
+/**
+ * Saves the profile from the dialog.
+ */
+async function saveProfile() {
+  const input = document.getElementById('profile-name-input');
+  const name = input.value.trim();
+  if (!name) return;
+
+  try {
+    await dbPutProfile({ id: editingProfileId, name });
+    document.getElementById('profile-dialog').close();
+    renderProfiles();
+  } catch (err) {
+    console.error('Failed to save profile:', err);
+  }
+}
+
+/**
+ * Deletes a profile after confirmation.
+ * @param {number} id
+ */
+async function deleteProfile(id) {
+  if (!confirm('Delete this profile?')) return;
+  try {
+    await dbDeleteProfile(id);
+    renderProfiles();
+  } catch (err) {
+    console.error('Failed to delete profile:', err);
+  }
+}
+
+/**
+ * Escapes HTML special characters to prevent XSS.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 // ── Timestamp Formatting ──────────────────────────────────────
@@ -1284,6 +1420,7 @@ function switchSettingsTab(tabName) {
   if (panel) panel.classList.add('active');
   settingsPagination.parentElement.classList.toggle('hidden', tabName !== 'trash');
   if (tabName === 'trash') renderSettingsTrash();
+  if (tabName === 'profiles') renderProfiles();
 }
 
 // Extra filter buttons
@@ -1348,7 +1485,7 @@ settingsDeletedList.addEventListener('click', (e) => {
 
 async function exportData() {
   try {
-    const [activeArr, completedArr, deletedArr] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+    const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet();
     const data = {
       active: activeArr,
       completed: completedArr,
@@ -1417,7 +1554,7 @@ async function importData(e) {
       console.log(`Imported ${totalCount - failedCount} todos`);
 
       // Refresh JS state
-      const [activeArr, completedArr, deletedArr] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+      const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet();
       active = activeArr;
       completed = completedArr;
       deleted = deletedArr;
@@ -1490,8 +1627,10 @@ if ('serviceWorker' in navigator) {
  * @returns {Promise<void>}
  */
 async function ensureStore() {
-  if (db.objectStoreNames.contains('todos')) return;
-  console.warn('todos store missing — recreating database');
+  const hasTodos = db.objectStoreNames.contains('todos');
+  const hasProfiles = db.objectStoreNames.contains(PROFILES_STORE_NAME);
+  if (hasTodos && hasProfiles) return;
+  console.warn('Missing stores — recreating database');
   db.close();
   db = null;
   return new Promise((resolve, reject) => {
@@ -1519,7 +1658,7 @@ async function ensureStore() {
 async function init() {
   await openDB();
   await ensureStore();
-  [active, completed, deleted] = await dbGet(DB_GET_ACTIVE | DB_GET_COMPLETED | DB_GET_DELETED);
+  ({ active, completed, deleted } = await dbGet());
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((t1,t2)=>t2.completedAt - t1.completedAt);
   active.forEach(todo => {
@@ -1546,6 +1685,27 @@ async function init() {
     btn.addEventListener('click', () => {
       applyTheme(btn.dataset.theme);
     });
+  });
+
+  // Profile dialog
+  const profileDialog = document.getElementById('profile-dialog');
+  document.getElementById('profile-add-btn')?.addEventListener('click', () => openProfileDialog(null));
+  document.getElementById('profile-save-btn')?.addEventListener('click', saveProfile);
+  document.getElementById('profile-cancel-btn')?.addEventListener('click', () => profileDialog.close());
+  profileDialog?.addEventListener('close', () => {
+    editingProfileId = null;
+    document.getElementById('profile-name-input').value = '';
+  });
+
+  // Event delegation for profiles list
+  const profilesList = document.getElementById('settings-profiles-list');
+  profilesList?.addEventListener('click', (e) => {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+    const action = actionEl.dataset.action;
+    const id = Number(actionEl.dataset.id);
+    if (action === 'edit') openProfileDialog(id);
+    if (action === 'delete') deleteProfile(id);
   });
 
 //   // Notification: list active tasks every 300s
