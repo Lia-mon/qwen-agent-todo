@@ -445,6 +445,19 @@ function dbDeleteProfileTodos(profileId) {
   });
 }
 
+/**
+ * Returns all todos across all profiles.
+ * @returns {Promise<Object[]>}
+ */
+function dbGetAllTodos() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 /** @type {number | null} */
 let editingProfileId = null;
 
@@ -475,6 +488,7 @@ async function renderProfiles() {
         ${profile.id === currentProfileId
           ? '<span class="profile-active-badge">Active</span>'
           : `<button class="settings-action-btn profile-load-btn" data-action="load" data-id="${profile.id}">Load</button>`}
+        <button class="settings-action-btn profile-export-btn" data-action="export" data-id="${profile.id}">Export</button>
         <button class="settings-action-btn profile-edit-btn" data-action="edit" data-id="${profile.id}">Edit</button>
         <button class="settings-action-btn danger profile-delete-btn" data-action="delete" data-id="${profile.id}">Delete</button>
       </div>
@@ -561,6 +575,15 @@ async function deleteProfile(id) {
  */
 async function loadProfile(id) {
   if (id === currentProfileId) return;
+  await activateProfile(id);
+}
+
+/**
+ * Loads the given profile into memory and re-renders, even when it is
+ * already the active profile.
+ * @param {number} id
+ */
+async function activateProfile(id) {
   currentProfileId = id;
   localStorage.setItem('activeProfile', String(id));
   ({ active, completed, deleted } = await dbGet(currentProfileId));
@@ -2167,12 +2190,14 @@ async function prepareExportTodos(todos) {
 
 async function exportData() {
   try {
-    const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet(currentProfileId);
+    const profiles = await dbGetProfiles();
+    const allTodos = await dbGetAllTodos();
     const data = {
-      active: await prepareExportTodos(activeArr),
-      completed: await prepareExportTodos(completedArr),
-      deleted: await prepareExportTodos(deletedArr),
-      exportedAt: new Date().toISOString()
+      version: 1,
+      type: 'all',
+      exportedAt: new Date().toISOString(),
+      profiles,
+      todos: await prepareExportTodos(allTodos)
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     downloadBlob(blob, `todo-app-export-${new Date().toISOString().slice(0, 10)}.json`);
@@ -2182,78 +2207,232 @@ async function exportData() {
   }
 }
 
+/**
+ * Exports a single profile with all of its tasks as a profile file.
+ * @param {number} id
+ */
+async function exportProfile(id) {
+  try {
+    const profiles = await dbGetProfiles();
+    const profile = profiles.find(p => p.id === id);
+    if (!profile) return;
+    const { active, completed, deleted } = await dbGet(id);
+    const data = {
+      version: 1,
+      type: 'profile',
+      exportedAt: new Date().toISOString(),
+      profile: { name: profile.name },
+      todos: await prepareExportTodos([...active, ...completed, ...deleted])
+    };
+    const slug = profile.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, `todo-app-profile-${slug || 'profile'}-${new Date().toISOString().slice(0, 10)}.json`);
+  } catch (err) {
+    console.error('Profile export failed:', err);
+    alert('Failed to export profile.');
+  }
+}
+
+/**
+ * Reads a file as JSON. Resolves null (with an alert) on read or parse failure.
+ * @param {File} file
+ * @returns {Promise<Object|null>}
+ */
+function readJsonFile(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onerror = () => {
+      alert('Failed to read the file.');
+      resolve(null);
+    };
+    reader.onload = (ev) => {
+      try {
+        resolve(JSON.parse(ev.target.result));
+      } catch {
+        alert('Invalid JSON file.');
+        resolve(null);
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
+/**
+ * Full import: dispatches on the file's format. "all" files restore
+ * everything, "profile" files add a profile, legacy files overwrite
+ * the current profile.
+ */
 async function importData(e) {
   const file = e.target.files[0];
   if (!file) return;
+  e.target.value = '';
+  const data = await readJsonFile(file);
+  if (data === null) return;
+  if (data.version === 1 && data.type === 'profile') await importProfileFile(data);
+  else if (data.version === 1 && data.type === 'all') await restoreAllData(data);
+  else if (data.active || data.completed || data.deleted) await importLegacyData(data);
+  else alert('Invalid data file — no tasks found.');
+}
 
-  if (!confirm('Importing will overwrite all tasks in the current profile. Continue?')) {
-    e.target.value = '';
-    return;
+/**
+ * Profile import: only accepts profile files — adds a new profile,
+ * never overwrites anything.
+ */
+async function importProfileData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const data = await readJsonFile(file);
+  if (data === null) return;
+  if (data.version === 1 && data.type === 'profile') {
+    await importProfileFile(data);
+  } else {
+    alert('Not a profile file. Use Import Data for full backups.');
   }
+}
 
-  const reader = new FileReader();
-  reader.onerror = () => alert('Failed to read the file.');
-  reader.onload = async (ev) => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!data || (!data.active && !data.completed && !data.deleted)) {
-        alert('Invalid data file — no tasks found.');
-        return;
-      }
-
-      // Restore attachments to Blobs before writing (async, so outside the transaction)
-      const prepared = [];
-      for (const arr of [data.active, data.completed, data.deleted]) {
-        if (Array.isArray(arr)) {
-          for (const todo of arr) {
-            const { id, ...todoWithoutId } = todo;
-            prepared.push({
-              ...todoWithoutId,
-              profileId: currentProfileId,
-              attachments: await deserializeAttachments(todo.attachments)
-            });
-          }
+/**
+ * Adds the file's profile as a new profile (name from the file) with its
+ * tasks. Existing profiles and tasks are untouched.
+ */
+async function importProfileFile(data) {
+  const name = (data.profile && data.profile.name) || 'Imported';
+  const todoCount = Array.isArray(data.todos) ? data.todos.length : 0;
+  if (!confirm(`Add a new profile "${name}" with ${todoCount} ${todoCount === 1 ? 'task' : 'tasks'}? Existing data is not modified.`)) return;
+  try {
+    const prepared = [];
+    for (const todo of data.todos || []) {
+      const { id, ...todoWithoutId } = todo;
+      prepared.push({
+        ...todoWithoutId,
+        attachments: await deserializeAttachments(todo.attachments)
+      });
+    }
+    // Profile + tasks in one transaction so a failed import rolls back cleanly
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_NAME, PROFILES_STORE_NAME], 'readwrite');
+      const profileReq = tx.objectStore(PROFILES_STORE_NAME).add({ name });
+      profileReq.onsuccess = () => {
+        const newProfileId = profileReq.result;
+        for (const todo of prepared) {
+          const req = tx.objectStore(STORE_NAME).add({ ...todo, profileId: newProfileId });
+          req.onerror = () => console.warn('Failed to import todo:', req.error);
         }
-      }
-
-      // Wipe + write in one transaction so a failed import can't leave the
-      // profile empty (a rejected tx rolls back both the deletes and the adds).
-      const existingKeys = await new Promise((resolve, reject) => {
-        const readTx = db.transaction(STORE_NAME, 'readonly');
-        const req = readTx.objectStore(STORE_NAME).index('profileId').getAllKeys(IDBKeyRange.only(currentProfileId));
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-      });
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      existingKeys.forEach(key => store.delete(key));
-      const importCounts = prepared.map(todo => {
-        const req = store.add(todo);
-        req.onerror = () => console.warn('Failed to import todo:', req.error);
-        return req;
-      });
-      await new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
-      });
-      const failedCount = importCounts.filter(r => r.error).length;
-      const totalCount = data.active?.length + data.completed?.length + data.deleted?.length || 0;
-      console.log(`Imported ${totalCount - failedCount} todos`);
+      };
+      profileReq.onerror = () => reject(profileReq.error);
+    });
+    renderProfiles();
+    alert(`Profile "${name}" imported.`);
+  } catch (err) {
+    console.error('Profile import failed:', err);
+    alert('Failed to import profile.');
+  }
+}
 
-      // Refresh JS state
-      const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet(currentProfileId);
-      active = activeArr;
-      completed = completedArr;
-      deleted = deletedArr;
-      render();
-      alert('Data imported successfully!');
-    } catch (err) {
-      console.error('Import failed:', err);
-      alert('Invalid JSON file.');
+/**
+ * Restores a full backup: replaces all profiles and tasks.
+ */
+async function restoreAllData(data) {
+  if (!confirm('Importing will replace ALL profiles and tasks. Continue?')) return;
+  try {
+    const prepared = [];
+    for (const todo of data.todos || []) {
+      const { id, ...todoWithoutId } = todo;
+      prepared.push({
+        ...todoWithoutId,
+        attachments: await deserializeAttachments(todo.attachments)
+      });
     }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
+    // Wipe + write in one transaction; profile ids are kept so the
+    // tasks' profileId references stay valid.
+    const tx = db.transaction([STORE_NAME, PROFILES_STORE_NAME], 'readwrite');
+    const todosStore = tx.objectStore(STORE_NAME);
+    const profilesStore = tx.objectStore(PROFILES_STORE_NAME);
+    todosStore.clear();
+    profilesStore.clear();
+    for (const profile of data.profiles || []) {
+      profilesStore.put({ id: profile.id, name: profile.name });
+    }
+    for (const todo of prepared) {
+      const req = todosStore.add(todo);
+      req.onerror = () => console.warn('Failed to import todo:', req.error);
+    }
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    const profiles = await dbGetProfiles();
+    const next = profiles.find(p => p.id === currentProfileId) || profiles[0];
+    if (!next) {
+      alert('The backup contained no profiles.');
+      return;
+    }
+    await activateProfile(next.id);
+    alert('Data imported successfully!');
+  } catch (err) {
+    console.error('Import failed:', err);
+    alert('Failed to import data.');
+  }
+}
+
+/**
+ * Legacy format ({active, completed, deleted}): overwrites the current profile.
+ */
+async function importLegacyData(data) {
+  if (!confirm('Importing will overwrite all tasks in the current profile. Continue?')) return;
+  try {
+    // Restore attachments to Blobs before writing (async, so outside the transaction)
+    const prepared = [];
+    for (const arr of [data.active, data.completed, data.deleted]) {
+      if (Array.isArray(arr)) {
+        for (const todo of arr) {
+          const { id, ...todoWithoutId } = todo;
+          prepared.push({
+            ...todoWithoutId,
+            profileId: currentProfileId,
+            attachments: await deserializeAttachments(todo.attachments)
+          });
+        }
+      }
+    }
+
+    // Wipe + write in one transaction so a failed import can't leave the
+    // profile empty (a rejected tx rolls back both the deletes and the adds).
+    const existingKeys = await new Promise((resolve, reject) => {
+      const readTx = db.transaction(STORE_NAME, 'readonly');
+      const req = readTx.objectStore(STORE_NAME).index('profileId').getAllKeys(IDBKeyRange.only(currentProfileId));
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    existingKeys.forEach(key => store.delete(key));
+    const importCounts = prepared.map(todo => {
+      const req = store.add(todo);
+      req.onerror = () => console.warn('Failed to import todo:', req.error);
+      return req;
+    });
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    const failedCount = importCounts.filter(r => r.error).length;
+    const totalCount = data.active?.length + data.completed?.length + data.deleted?.length || 0;
+    console.log(`Imported ${totalCount - failedCount} todos`);
+
+    // Refresh JS state
+    const { active: activeArr, completed: completedArr, deleted: deletedArr } = await dbGet(currentProfileId);
+    active = activeArr;
+    completed = completedArr;
+    deleted = deletedArr;
+    render();
+    alert('Data imported successfully!');
+  } catch (err) {
+    console.error('Import failed:', err);
+    alert('Failed to import data.');
+  }
 }
 
 async function clearAllData() {
@@ -2370,6 +2549,8 @@ async function init() {
   document.getElementById('export-data')?.addEventListener('click', exportData);
   document.getElementById('import-data-btn')?.addEventListener('click', () => document.getElementById('import-data')?.click());
   document.getElementById('import-data')?.addEventListener('change', importData);
+  document.getElementById('import-profile-btn')?.addEventListener('click', () => document.getElementById('import-profile')?.click());
+  document.getElementById('import-profile')?.addEventListener('change', importProfileData);
   document.getElementById('clear-data')?.addEventListener('click', clearAllData);
   document.getElementById('notif-toggle')?.addEventListener('change', toggleNotifications);
   document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
@@ -2401,6 +2582,7 @@ async function init() {
     const action = actionEl.dataset.action;
     const id = Number(actionEl.dataset.id);
     if (action === 'load') loadProfile(id);
+    if (action === 'export') exportProfile(id);
     if (action === 'edit') openProfileDialog(id);
     if (action === 'delete') deleteProfile(id);
   });

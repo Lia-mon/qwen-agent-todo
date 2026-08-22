@@ -96,11 +96,18 @@
             <span>Export Data</span>
             <button id="export-data" class="settings-action-btn">Export JSON</button>
             </div>
+            <p class="setting-hint">Exports all profiles and tasks. Individual profiles can be exported from the Profiles tab.</p>
             <div class="setting-row">
             <span>Import Data</span>
             <input type="file" id="import-data" accept=".json" style="display:none">
             <button id="import-data-btn" class="settings-action-btn">Import JSON</button>
             </div>
+            <div class="setting-row">
+            <span>Import Profile</span>
+            <input type="file" id="import-profile" accept=".json" style="display:none">
+            <button id="import-profile-btn" class="settings-action-btn">Import JSON</button>
+            </div>
+            <p class="setting-hint">Adds the file's profile as a new profile. Existing profiles and tasks are not modified.</p>
             <div class="setting-row">
             <span>Clear All Data</span>
             <button id="clear-data" class="settings-action-btn danger">Clear</button>
