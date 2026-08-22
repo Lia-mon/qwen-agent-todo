@@ -1245,6 +1245,11 @@ body {
   gap: 6px;
   font-size: 0.85rem;
   color: var(--color-text);
+  cursor: pointer;
+}
+
+.task-extras .subtask-item:hover .subtask-text {
+  text-decoration: underline;
 }
 
 .task-extras .subtask-check {

@@ -959,7 +959,7 @@ function buildItem(todo, view) {
 
       if (hasSubtasks) {
         const stSection = document.createElement('div');
-        stSection.className = 'extras-section';
+        stSection.className = 'extras-section subtasks-section';
         const stHeading = document.createElement('div');
         stHeading.className = 'extras-heading';
         stHeading.textContent = `Subtasks (${doneCount}/${todo.subtasks.length})`;
@@ -968,6 +968,10 @@ function buildItem(todo, view) {
         for (const st of todo.subtasks) {
           const stItem = document.createElement('li');
           stItem.className = 'subtask-item' + (st.done ? ' done' : '');
+          stItem.dataset.action = 'toggle-subtask';
+          stItem.dataset.id = todo.id;
+          stItem.dataset.subtaskId = st.id;
+          stItem.title = st.done ? 'Mark as not done' : 'Mark as done';
           const stCheck = document.createElement('span');
           stCheck.className = 'subtask-check';
           stCheck.textContent = st.done ? '✓' : '○';
@@ -1685,6 +1689,45 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
 }
 
 /**
+ * Toggles a subtask's done state from the details panel.
+ * Persists the todo and updates the panel item, heading, and N/M badge in place
+ * (a full item rebuild would collapse the open panel).
+ * @param {number} todoId
+ * @param {string} subtaskId
+ * @returns {Promise<void>}
+ */
+async function toggleSubtask(todoId, subtaskId) {
+  const todo = active.find(t => t.id === todoId) || completed.find(t => t.id === todoId);
+  if (!todo || !todo.subtasks) return;
+  const subtask = todo.subtasks.find(s => s.id === subtaskId);
+  if (!subtask) return;
+
+  subtask.done = !subtask.done;
+  await dbPut(todo);
+
+  const doneCount = todo.subtasks.filter(s => s.done).length;
+  const el = document.querySelector(`li[data-id="${todoId}"]`);
+  if (!el) return;
+
+  const stItem = el.querySelector(`.subtask-item[data-subtask-id="${subtaskId}"]`);
+  if (stItem) {
+    stItem.classList.toggle('done', subtask.done);
+    stItem.title = subtask.done ? 'Mark as not done' : 'Mark as done';
+    const stCheck = stItem.querySelector('.subtask-check');
+    if (stCheck) stCheck.textContent = subtask.done ? '✓' : '○';
+  }
+
+  const stHeading = el.querySelector('.subtasks-section .extras-heading');
+  if (stHeading) stHeading.textContent = `Subtasks (${doneCount}/${todo.subtasks.length})`;
+
+  const stBadge = el.querySelector('.badge.subtasks');
+  if (stBadge) {
+    stBadge.textContent = `${doneCount}/${todo.subtasks.length}`;
+    stBadge.title = `${doneCount} of ${todo.subtasks.length} subtasks done`;
+  }
+}
+
+/**
  * Toggles a todo's completion status. Sets completed flag and completedAt timestamp.
  * @param {number} id - Todo ID
  * @returns {Promise<void>}
@@ -2000,6 +2043,10 @@ todoList.addEventListener('click', (e) => {
       }
       break;
     }
+    case 'toggle-subtask':
+      // Subtask ids are string UUIDs (newId()), not numbers
+      toggleSubtask(id, actionEl.dataset.subtaskId);
+      break;
     case 'restore':
       restoreTrash(id);
       break;
