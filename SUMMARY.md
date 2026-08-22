@@ -91,10 +91,11 @@ permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
 ### Task Management
 
 - **Add tasks** via dialog with text, repeat schedule, importance, duration, deadline, notes, subtasks, and file attachments
-- **Edit tasks** by clicking the text area (same dialog, `editingTodoId` tracks mode)
-- **Notes** — free-form textarea in the dialog; a 📝 badge marks tasks with notes in the list (hover shows the text)
-- **Subtasks** — inline checklist in the dialog (add/check/remove); an `N/M` progress badge shows in the list
-- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a thumbnail preview); blobs stored on the todo, `N` count badge (📎) in the list, click a name to download
+- **Edit tasks** via the Edit button at the right of the item (same dialog, `editingTodoId` tracks mode)
+- **Notes** — free-form textarea in the dialog; a 📝 badge shows at the right of the list item
+- **Subtasks** — inline checklist in the dialog (add/check/remove); an `N/M` progress badge shows at the right of the list item
+- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a thumbnail preview); blobs stored on the todo, 📎 count badge at the right of the list item, click a name to download
+- **Details panel** — a Details button (shown when the item has notes, subtasks, or attachments) toggles an inline `.task-extras` panel showing the notes text, a read-only subtask checklist (✓/○), and the attachments (name + size, click to download); the chevron rotates to indicate the open state. Toggled via the `expand-extras` delegated action
 - **Complete tasks** by clicking the checkbox — moves from active to completed
 - **Delete tasks** (soft delete) — moves to trash, not permanently removed
 - **Restore from trash** — moves back to active or completed depending on prior state

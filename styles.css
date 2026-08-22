@@ -1064,6 +1064,7 @@ body {
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border-light);
   animation: fadeIn var(--transition-base) ease;
+  flex-wrap: wrap;
 }
 
 @keyframes fadeIn {
@@ -1100,7 +1101,6 @@ body {
 .todo-item .text-area {
   flex: 1;
   min-width: 0;
-  cursor: pointer;
 }
 
 .todo-item .text {
@@ -1143,6 +1143,121 @@ body {
 .badge.note { background: var(--badge-note-bg); color: var(--badge-note-fg); }
 .badge.subtasks { background: var(--badge-subtasks-bg); color: var(--badge-subtasks-fg); }
 .badge.attachments { background: var(--badge-attachments-bg); color: var(--badge-attachments-fg); }
+
+/* ── Item actions (badges + Details expand + Edit) ──────────── */
+
+.todo-item .item-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Wider gap between the info badges and the action buttons */
+.item-action.expand-btn {
+  margin-left: 6px;
+}
+
+.item-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--transition-base), filter var(--transition-base);
+}
+
+.item-action:hover {
+  background: var(--color-hover);
+}
+
+.item-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.item-action.expand-btn::after {
+  content: '▾';
+  font-size: 0.7rem;
+  margin-left: 2px;
+  transition: transform var(--transition-base);
+}
+
+.item-action.expand-btn[aria-expanded="true"]::after {
+  transform: rotate(180deg);
+}
+
+.todo-item .task-extras {
+  display: none;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: var(--color-border-lighter);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+.todo-item.expanded .task-extras {
+  display: block;
+  animation: fadeIn var(--transition-base) ease;
+}
+
+.task-extras .extras-section + .extras-section {
+  margin-top: 10px;
+}
+
+.task-extras .extras-heading {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.task-extras .notes-text {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.task-extras .subtask-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.task-extras .subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.task-extras .subtask-check {
+  color: var(--color-success);
+}
+
+.task-extras .subtask-item.done {
+  color: var(--color-text-faint);
+}
+
+.task-extras .subtask-item.done .subtask-text {
+  text-decoration: line-through;
+}
 
 .todo-item .timestamps {
   display: flex;

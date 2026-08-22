@@ -848,8 +848,6 @@ function buildItem(todo, view) {
 
     const textArea = document.createElement('div');
     textArea.className = 'text-area';
-    textArea.dataset.action = 'edit';
-    textArea.dataset.id = todo.id;
 
     const textEl = document.createElement('span');
     textEl.className = 'text';
@@ -887,34 +885,138 @@ function buildItem(todo, view) {
       meta.appendChild(dlBadge);
     }
 
-    if (todo.notes) {
+    textArea.append(textEl, meta);
+    textArea.appendChild(buildTimestamps(todo));
+
+    // Right-side extras: plain badges + Details expand button + Edit button
+    const hasNotes = Boolean(todo.notes);
+    const hasSubtasks = Boolean(todo.subtasks && todo.subtasks.length);
+    const hasAttachments = Boolean(todo.attachments && todo.attachments.length);
+    const doneCount = todo.subtasks ? todo.subtasks.filter(s => s.done).length : 0;
+
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
+
+    if (hasNotes) {
       const noteBadge = document.createElement('span');
       noteBadge.className = 'badge note';
       noteBadge.textContent = '📝';
-      noteBadge.title = todo.notes;
-      meta.appendChild(noteBadge);
+      noteBadge.title = 'Notes';
+      actions.appendChild(noteBadge);
     }
 
-    if (todo.subtasks && todo.subtasks.length) {
-      const doneCount = todo.subtasks.filter(s => s.done).length;
+    if (hasSubtasks) {
       const stBadge = document.createElement('span');
       stBadge.className = 'badge subtasks';
       stBadge.textContent = `${doneCount}/${todo.subtasks.length}`;
       stBadge.title = `${doneCount} of ${todo.subtasks.length} subtasks done`;
-      meta.appendChild(stBadge);
+      actions.appendChild(stBadge);
     }
 
-    if (todo.attachments && todo.attachments.length) {
+    if (hasAttachments) {
       const attBadge = document.createElement('span');
       attBadge.className = 'badge attachments';
       attBadge.textContent = `📎 ${todo.attachments.length}`;
       attBadge.title = todo.attachments.map(a => a.name).join(', ');
-      meta.appendChild(attBadge);
+      actions.appendChild(attBadge);
     }
 
-    textArea.append(textEl, meta);
-    textArea.appendChild(buildTimestamps(todo));
-    li.append(checkbox, textArea);
+    if (hasNotes || hasSubtasks || hasAttachments) {
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'item-action expand-btn';
+      expandBtn.textContent = 'Details';
+      expandBtn.dataset.action = 'expand-extras';
+      expandBtn.dataset.id = todo.id;
+      expandBtn.setAttribute('aria-expanded', 'false');
+      actions.appendChild(expandBtn);
+    }
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'item-action edit-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.dataset.action = 'edit';
+    editBtn.dataset.id = todo.id;
+    actions.appendChild(editBtn);
+
+    li.append(checkbox, textArea, actions);
+
+    if (hasNotes || hasSubtasks || hasAttachments) {
+      const extras = document.createElement('div');
+      extras.className = 'task-extras';
+
+      if (hasNotes) {
+        const notesSection = document.createElement('div');
+        notesSection.className = 'extras-section';
+        const notesHeading = document.createElement('div');
+        notesHeading.className = 'extras-heading';
+        notesHeading.textContent = 'Notes';
+        const notesText = document.createElement('div');
+        notesText.className = 'notes-text';
+        notesText.textContent = todo.notes;
+        notesSection.append(notesHeading, notesText);
+        extras.appendChild(notesSection);
+      }
+
+      if (hasSubtasks) {
+        const stSection = document.createElement('div');
+        stSection.className = 'extras-section';
+        const stHeading = document.createElement('div');
+        stHeading.className = 'extras-heading';
+        stHeading.textContent = `Subtasks (${doneCount}/${todo.subtasks.length})`;
+        const stList = document.createElement('ul');
+        stList.className = 'subtask-list';
+        for (const st of todo.subtasks) {
+          const stItem = document.createElement('li');
+          stItem.className = 'subtask-item' + (st.done ? ' done' : '');
+          const stCheck = document.createElement('span');
+          stCheck.className = 'subtask-check';
+          stCheck.textContent = st.done ? '✓' : '○';
+          const stText = document.createElement('span');
+          stText.className = 'subtask-text';
+          stText.textContent = st.text;
+          stItem.append(stCheck, stText);
+          stList.appendChild(stItem);
+        }
+        stSection.append(stHeading, stList);
+        extras.appendChild(stSection);
+      }
+
+      if (hasAttachments) {
+        const attSection = document.createElement('div');
+        attSection.className = 'extras-section';
+        const attHeading = document.createElement('div');
+        attHeading.className = 'extras-heading';
+        attHeading.textContent = `Attachments (${todo.attachments.length})`;
+        const attList = document.createElement('ul');
+        attList.className = 'attachment-list';
+        for (const att of todo.attachments) {
+          const attItem = document.createElement('li');
+          attItem.className = 'attachment-item';
+          const attName = document.createElement('span');
+          attName.className = 'attachment-name';
+          attName.textContent = att.name;
+          attName.title = 'Download';
+          attName.addEventListener('click', () => {
+            const url = URL.createObjectURL(att.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = att.name;
+            a.click();
+            // Defer revoke so the download has started in every browser
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          });
+          const attSize = document.createElement('span');
+          attSize.className = 'attachment-size';
+          attSize.textContent = formatBytes(att.size);
+          attItem.append(attName, attSize);
+          attList.appendChild(attItem);
+        }
+        attSection.append(attHeading, attList);
+        extras.appendChild(attSection);
+      }
+
+      li.appendChild(extras);
+    }
   }
 
   return li;
@@ -1890,6 +1992,14 @@ todoList.addEventListener('click', (e) => {
       const editTodo = active.find(t => t.id === id) || completed.find(t => t.id === id);
       if (editTodo) openEditDialog(editTodo);
       break;
+    case 'expand-extras': {
+      const item = actionEl.closest('.todo-item');
+      if (item) {
+        const expanded = item.classList.toggle('expanded');
+        item.querySelectorAll('.expand-btn').forEach(btn => btn.setAttribute('aria-expanded', String(expanded)));
+      }
+      break;
+    }
     case 'restore':
       restoreTrash(id);
       break;
