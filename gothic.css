@@ -8,8 +8,8 @@
   --color-surface: #1a1a1a;
   --color-text: #d4c8b8;
   --color-text-secondary: #9a8e7e;
-  --color-text-muted: #6b6056;
-  --color-text-faint: #5a5048;
+  --color-text-muted: #8a7e6e;
+  --color-text-faint: #7a6e60;
   --color-text-tertiary: #7a6e60;
 
   --color-primary: #8b0000;
@@ -25,30 +25,36 @@
   --color-danger: #cc0000;
   --color-danger-hover: #990000;
 
-  --color-success: #2d5a2d;
+  --color-success: #5a9a5a;
   --color-success-hover: #3d7a3d;
 
-  --color-warning: #8b6914;
+  --color-warning: #b8860b;
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: rgba(204, 0, 0, 0.25);
-  --badge-importance-high-fg: #cc0000;
+  --badge-importance-high-fg: #e85555;
   --badge-importance-medium-bg: rgba(139, 105, 20, 0.25);
   --badge-importance-medium-fg: #b8860b;
   --badge-importance-low-bg: rgba(100, 80, 60, 0.25);
-  --badge-importance-low-fg: #8a7e6e;
+  --badge-importance-low-fg: #a89a88;
 
   --badge-urgency-stressy-bg: rgba(204, 0, 0, 0.25);
-  --badge-urgency-stressy-fg: #cc0000;
+  --badge-urgency-stressy-fg: #e85555;
   --badge-urgency-balanced-bg: rgba(139, 105, 20, 0.25);
   --badge-urgency-balanced-fg: #b8860b;
   --badge-urgency-lax-bg: rgba(45, 90, 45, 0.25);
-  --badge-urgency-lax-fg: #4a7a4a;
+  --badge-urgency-lax-fg: #5a9a5a;
 
   --badge-repeatable-bg: rgba(45, 90, 45, 0.25);
-  --badge-repeatable-fg: #4a7a4a;
+  --badge-repeatable-fg: #5a9a5a;
   --badge-deadline-bg: rgba(255, 255, 255, 0.03);
-  --badge-deadline-fg: #6b6056;
+  --badge-deadline-fg: #8a7e6e;
+  --badge-note-bg: rgba(255, 255, 255, 0.05);
+  --badge-note-fg: #9a8e7e;
+  --badge-subtasks-bg: rgba(45, 90, 45, 0.25);
+  --badge-subtasks-fg: #5a9a5a;
+  --badge-attachments-bg: rgba(184, 134, 11, 0.15);
+  --badge-attachments-fg: #b8860b;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 0px;
@@ -425,6 +431,15 @@ body::before {
 .page-btn:hover:not(:disabled) {
   background: var(--color-border-light);
   transform: none;
+}
+
+/* ── Readable accent for text-on-dark ────────────────────
+   --color-primary (#8b0000) is too dark to read on this
+   background, so text-color uses of it get a lighter red. */
+.attachment-name,
+.settings-tab:hover,
+.filter-btn:hover {
+  color: #e85555;
 }
 
 

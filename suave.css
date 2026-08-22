@@ -9,7 +9,7 @@
   --color-text: #e0e0e0;
   --color-text-secondary: #a0a0a0;
   --color-text-muted: #888888;
-  --color-text-faint: #666666;
+  --color-text-faint: #777777;
   --color-text-tertiary: #999999;
 
   --color-primary: #0f3460;
@@ -49,6 +49,12 @@
   --badge-repeatable-fg: #27ae60;
   --badge-deadline-bg: rgba(255, 255, 255, 0.05);
   --badge-deadline-fg: #888888;
+  --badge-note-bg: rgba(255, 255, 255, 0.05);
+  --badge-note-fg: #a0a0a0;
+  --badge-subtasks-bg: rgba(39, 174, 96, 0.2);
+  --badge-subtasks-fg: #27ae60;
+  --badge-attachments-bg: rgba(93, 173, 226, 0.15);
+  --badge-attachments-fg: #5dade2;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 2px;
@@ -243,5 +249,14 @@ body {
 
 .footer {
   border-top-width: 1px;
+}
+
+/* ── Readable accent for text-on-dark ────────────────────
+   --color-primary (#0f3460) is too dark to read on this
+   background, so text-color uses of it get a lighter blue. */
+.attachment-name,
+.settings-tab:hover,
+.filter-btn:hover {
+  color: #5dade2;
 }
 
