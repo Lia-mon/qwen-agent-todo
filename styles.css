@@ -1571,3 +1571,18 @@ body {
     transition: none !important;
   }
 }
+
+/* ── DB Blocked Banner ────────────────────────────────────────── */
+
+#db-blocked-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-bottom: 2px solid var(--color-warning);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+  font-size: 0.9rem;
+}

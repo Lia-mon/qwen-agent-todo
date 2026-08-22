@@ -260,6 +260,20 @@ function onUpgradeNeeded(event) {
 }
 
 /**
+ * Shows a banner when a DB version upgrade is blocked by another open tab.
+ * Removed automatically once the blocked open succeeds.
+ */
+function showBlockedBanner() {
+  if (document.getElementById('db-blocked-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'db-blocked-banner';
+  banner.textContent =
+    'Another tab has this app open and is blocking a database update. '
+    + 'Close or reload the other tab — this page will continue automatically.';
+  document.body.appendChild(banner);
+}
+
+/**
  * Opens the IndexedDB database, running any needed upgrades.
  * @returns {Promise<void>}
  */
@@ -270,6 +284,7 @@ function openDB() {
     request.onupgradeneeded = onUpgradeNeeded;
 
     request.onsuccess = () => {
+      document.getElementById('db-blocked-banner')?.remove();
       db = request.result;
       resolve();
     };
@@ -278,6 +293,7 @@ function openDB() {
 
     request.onblocked = () => {
       console.warn('DB upgrade blocked — another tab has the DB open. Close it and reload.');
+      showBlockedBanner();
     };
   });
 }
@@ -720,8 +736,10 @@ function checkTasks() {
   const changedIds = new Set();
   let purgedCount = 0;
 
-  // Check completed repeatable tasks for re-emergence
-  for (let i = 0; i < completed.length; i++) {
+  // Check completed repeatable tasks for re-emergence.
+  // Iterate backwards: splicing during a forward loop would skip items
+  // that shift into the current index.
+  for (let i = completed.length - 1; i >= 0; i--) {
     const todo = completed[i];
     if (todo.repeat && todo.nextRepeatDate && now >= todo.nextRepeatDate) {
       changes.push({ type: 're-emerged', text: todo.text });
@@ -731,8 +749,7 @@ function checkTasks() {
       changed = true;
       changedIds.add(todo.id);
       // Move back to active
-      const idx = completed.indexOf(todo);
-      if (idx > -1) completed.splice(idx, 1);
+      completed.splice(i, 1);
       active.push(todo);
     }
   }
@@ -1756,7 +1773,7 @@ async function toggleTodo(id) {
     delete todo.nextRepeatDate;
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
-    active.push(todo);
+    binaryInsert(active, todo, (a, b) => b.createdAt - a.createdAt);
     removeTodoFromDOM(todo.id);
   }
 
