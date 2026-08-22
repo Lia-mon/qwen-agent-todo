@@ -1722,7 +1722,6 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
 
   await dbPut(todo);
   updateTodoInDOM(todo);
-  completedPage = 1;
   updateFooter();
   updateFilterButtons();
 }
@@ -2609,4 +2608,7 @@ function applyTheme(theme) {
   document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
 }
 
-init();
+init().catch(err => {
+  console.error('Failed to initialize app:', err);
+  alert('Failed to start the app. Check the console for details.');
+});
