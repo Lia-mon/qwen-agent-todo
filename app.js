@@ -600,7 +600,9 @@ function formatTimestamp(timestamp) {
   const hour = String(d.getHours()).padStart(2, '0');
   const minute = String(d.getMinutes()).padStart(2, '0');
   const second = String(d.getSeconds()).padStart(2, '0');
-  return `${month}/${day} ${hour}:${minute}:${second}`;
+  // Include the year only for other years, to keep this-year timestamps compact
+  const year = d.getFullYear() === new Date().getFullYear() ? '' : `/${d.getFullYear()}`;
+  return `${month}/${day}${year} ${hour}:${minute}:${second}`;
 }
 
 /**
@@ -1017,15 +1019,7 @@ function buildItem(todo, view) {
           attName.className = 'attachment-name';
           attName.textContent = att.name;
           attName.title = 'Download';
-          attName.addEventListener('click', () => {
-            const url = URL.createObjectURL(att.blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = att.name;
-            a.click();
-            // Defer revoke so the download has started in every browser
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          });
+          attName.addEventListener('click', () => downloadBlob(att.blob, att.name));
           const attSize = document.createElement('span');
           attSize.className = 'attachment-size';
           attSize.textContent = formatBytes(att.size);
@@ -1444,6 +1438,19 @@ function formatBytes(n) {
 }
 
 /**
+ * Triggers a browser download of a blob under the given filename.
+ * Revoke is deferred so the download has started in every browser.
+ */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
  * Revokes all thumbnail object URLs (called before re-render and on close).
  */
 function clearAttachmentThumbs() {
@@ -1467,15 +1474,7 @@ function renderDialogAttachments() {
     nameEl.className = 'attachment-name';
     nameEl.textContent = att.name;
     nameEl.title = 'Download';
-    nameEl.addEventListener('click', () => {
-      const url = URL.createObjectURL(att.blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = att.name;
-      a.click();
-      // Defer revoke so the download has started in every browser
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
+    nameEl.addEventListener('click', () => downloadBlob(att.blob, att.name));
 
     const sizeEl = document.createElement('span');
     sizeEl.className = 'attachment-size';
@@ -1564,7 +1563,7 @@ attachmentInput.addEventListener('change', () => {
       name: file.name,
       type: file.type,
       size: file.size,
-      blob: new Blob([file], { type: file.type })
+      blob: file
     });
   }
   attachmentInput.value = '';
@@ -2048,10 +2047,11 @@ todoList.addEventListener('click', (e) => {
     case 'toggle':
       toggleTodo(id);
       break;
-    case 'edit':
+    case 'edit': {
       const editTodo = active.find(t => t.id === id) || completed.find(t => t.id === id);
       if (editTodo) openEditDialog(editTodo);
       break;
+    }
     case 'expand-extras': {
       const item = actionEl.closest('.todo-item');
       if (item) {
@@ -2175,12 +2175,7 @@ async function exportData() {
       exportedAt: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `todo-app-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `todo-app-export-${new Date().toISOString().slice(0, 10)}.json`);
   } catch (err) {
     console.error('Export failed:', err);
     alert('Failed to export data.');
@@ -2197,6 +2192,7 @@ async function importData(e) {
   }
 
   const reader = new FileReader();
+  reader.onerror = () => alert('Failed to read the file.');
   reader.onload = async (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
@@ -2204,9 +2200,6 @@ async function importData(e) {
         alert('Invalid data file — no tasks found.');
         return;
       }
-
-      // Clear the current profile's existing tasks
-      await dbDeleteProfileTodos(currentProfileId);
 
       // Restore attachments to Blobs before writing (async, so outside the transaction)
       const prepared = [];
@@ -2223,9 +2216,17 @@ async function importData(e) {
         }
       }
 
-      // Write imported tasks (strip IDs so auto-increment assigns fresh ones)
+      // Wipe + write in one transaction so a failed import can't leave the
+      // profile empty (a rejected tx rolls back both the deletes and the adds).
+      const existingKeys = await new Promise((resolve, reject) => {
+        const readTx = db.transaction(STORE_NAME, 'readonly');
+        const req = readTx.objectStore(STORE_NAME).index('profileId').getAllKeys(IDBKeyRange.only(currentProfileId));
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
+      existingKeys.forEach(key => store.delete(key));
       const importCounts = prepared.map(todo => {
         const req = store.add(todo);
         req.onerror = () => console.warn('Failed to import todo:', req.error);
