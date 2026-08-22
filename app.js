@@ -63,6 +63,21 @@ const attachmentInput = document.getElementById('attachment-input');
 const attachmentList = document.getElementById('attachment-list');
 
 /** @type {HTMLElement} */
+const attachmentGallery = document.getElementById('attachment-gallery');
+
+/** @type {HTMLElement} */
+const galleryTrack = document.getElementById('gallery-track');
+
+/** @type {HTMLButtonElement} */
+const galleryPrev = document.getElementById('gallery-prev');
+
+/** @type {HTMLButtonElement} */
+const galleryNext = document.getElementById('gallery-next');
+
+/** @type {HTMLElement} */
+const galleryCounter = document.getElementById('gallery-counter');
+
+/** @type {HTMLElement} */
 const todoList = document.getElementById('todo-list');
 if (!todoList) console.error('todoList is null!');
 
@@ -833,8 +848,6 @@ function buildItem(todo, view) {
 
     const textArea = document.createElement('div');
     textArea.className = 'text-area';
-    textArea.dataset.action = 'edit';
-    textArea.dataset.id = todo.id;
 
     const textEl = document.createElement('span');
     textEl.className = 'text';
@@ -872,34 +885,142 @@ function buildItem(todo, view) {
       meta.appendChild(dlBadge);
     }
 
-    if (todo.notes) {
+    textArea.append(textEl, meta);
+    textArea.appendChild(buildTimestamps(todo));
+
+    // Right-side extras: plain badges + Details expand button + Edit button
+    const hasNotes = Boolean(todo.notes);
+    const hasSubtasks = Boolean(todo.subtasks && todo.subtasks.length);
+    const hasAttachments = Boolean(todo.attachments && todo.attachments.length);
+    const doneCount = todo.subtasks ? todo.subtasks.filter(s => s.done).length : 0;
+
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
+
+    if (hasNotes) {
       const noteBadge = document.createElement('span');
       noteBadge.className = 'badge note';
       noteBadge.textContent = '📝';
-      noteBadge.title = todo.notes;
-      meta.appendChild(noteBadge);
+      noteBadge.title = 'Notes';
+      actions.appendChild(noteBadge);
     }
 
-    if (todo.subtasks && todo.subtasks.length) {
-      const doneCount = todo.subtasks.filter(s => s.done).length;
+    if (hasSubtasks) {
       const stBadge = document.createElement('span');
       stBadge.className = 'badge subtasks';
       stBadge.textContent = `${doneCount}/${todo.subtasks.length}`;
       stBadge.title = `${doneCount} of ${todo.subtasks.length} subtasks done`;
-      meta.appendChild(stBadge);
+      actions.appendChild(stBadge);
     }
 
-    if (todo.attachments && todo.attachments.length) {
+    if (hasAttachments) {
       const attBadge = document.createElement('span');
       attBadge.className = 'badge attachments';
       attBadge.textContent = `📎 ${todo.attachments.length}`;
       attBadge.title = todo.attachments.map(a => a.name).join(', ');
-      meta.appendChild(attBadge);
+      actions.appendChild(attBadge);
     }
 
-    textArea.append(textEl, meta);
-    textArea.appendChild(buildTimestamps(todo));
-    li.append(checkbox, textArea);
+    if (hasNotes || hasSubtasks || hasAttachments) {
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'item-action expand-btn';
+      expandBtn.textContent = 'Details';
+      expandBtn.dataset.action = 'expand-extras';
+      expandBtn.dataset.id = todo.id;
+      expandBtn.setAttribute('aria-expanded', 'false');
+      actions.appendChild(expandBtn);
+    }
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'item-action edit-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.dataset.action = 'edit';
+    editBtn.dataset.id = todo.id;
+    actions.appendChild(editBtn);
+
+    li.append(checkbox, textArea, actions);
+
+    if (hasNotes || hasSubtasks || hasAttachments) {
+      const extras = document.createElement('div');
+      extras.className = 'task-extras';
+
+      if (hasNotes) {
+        const notesSection = document.createElement('div');
+        notesSection.className = 'extras-section';
+        const notesHeading = document.createElement('div');
+        notesHeading.className = 'extras-heading';
+        notesHeading.textContent = 'Notes';
+        const notesText = document.createElement('div');
+        notesText.className = 'notes-text';
+        notesText.textContent = todo.notes;
+        notesSection.append(notesHeading, notesText);
+        extras.appendChild(notesSection);
+      }
+
+      if (hasSubtasks) {
+        const stSection = document.createElement('div');
+        stSection.className = 'extras-section subtasks-section';
+        const stHeading = document.createElement('div');
+        stHeading.className = 'extras-heading';
+        stHeading.textContent = `Subtasks (${doneCount}/${todo.subtasks.length})`;
+        const stList = document.createElement('ul');
+        stList.className = 'subtask-list';
+        for (const st of todo.subtasks) {
+          const stItem = document.createElement('li');
+          stItem.className = 'subtask-item' + (st.done ? ' done' : '');
+          stItem.dataset.action = 'toggle-subtask';
+          stItem.dataset.id = todo.id;
+          stItem.dataset.subtaskId = st.id;
+          stItem.title = st.done ? 'Mark as not done' : 'Mark as done';
+          const stCheck = document.createElement('span');
+          stCheck.className = 'subtask-check';
+          stCheck.textContent = st.done ? '✓' : '○';
+          const stText = document.createElement('span');
+          stText.className = 'subtask-text';
+          stText.textContent = st.text;
+          stItem.append(stCheck, stText);
+          stList.appendChild(stItem);
+        }
+        stSection.append(stHeading, stList);
+        extras.appendChild(stSection);
+      }
+
+      if (hasAttachments) {
+        const attSection = document.createElement('div');
+        attSection.className = 'extras-section';
+        const attHeading = document.createElement('div');
+        attHeading.className = 'extras-heading';
+        attHeading.textContent = `Attachments (${todo.attachments.length})`;
+        const attList = document.createElement('ul');
+        attList.className = 'attachment-list';
+        for (const att of todo.attachments) {
+          const attItem = document.createElement('li');
+          attItem.className = 'attachment-item';
+          const attName = document.createElement('span');
+          attName.className = 'attachment-name';
+          attName.textContent = att.name;
+          attName.title = 'Download';
+          attName.addEventListener('click', () => {
+            const url = URL.createObjectURL(att.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = att.name;
+            a.click();
+            // Defer revoke so the download has started in every browser
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          });
+          const attSize = document.createElement('span');
+          attSize.className = 'attachment-size';
+          attSize.textContent = formatBytes(att.size);
+          attItem.append(attName, attSize);
+          attList.appendChild(attItem);
+        }
+        attSection.append(attHeading, attList);
+        extras.appendChild(attSection);
+      }
+
+      li.appendChild(extras);
+    }
   }
 
   return li;
@@ -1314,7 +1435,9 @@ function clearAttachmentThumbs() {
 }
 
 /**
- * Rebuilds the dialog's attachment list from dialogAttachments.
+ * Rebuilds the dialog's attachment list from dialogAttachments, then the
+ * image gallery. The gallery handles previews; list rows manage (download
+ * / remove) all attachments.
  */
 function renderDialogAttachments() {
   clearAttachmentThumbs();
@@ -1322,15 +1445,6 @@ function renderDialogAttachments() {
   for (const att of dialogAttachments) {
     const li = document.createElement('li');
     li.className = 'attachment-item';
-
-    if (att.type && att.type.startsWith('image/')) {
-      const img = document.createElement('img');
-      img.className = 'attachment-thumb';
-      img.src = URL.createObjectURL(att.blob);
-      img.alt = '';
-      attachmentThumbUrls.push(img.src);
-      li.appendChild(img);
-    }
 
     const nameEl = document.createElement('span');
     nameEl.className = 'attachment-name';
@@ -1363,7 +1477,68 @@ function renderDialogAttachments() {
     li.append(nameEl, sizeEl, delBtn);
     attachmentList.appendChild(li);
   }
+  renderGallery();
 }
+
+// Must match the .gallery-track gap in styles.css.
+const GALLERY_GAP = 8;
+
+/**
+ * Rebuilds the swipeable image gallery from dialogAttachments. Non-image
+ * attachments are skipped; the gallery is hidden entirely when there are
+ * no images. The scroll position is preserved across re-renders so adding
+ * or removing an attachment doesn't yank the user back to slide one.
+ */
+function renderGallery() {
+  const images = dialogAttachments.filter(a => a.type && a.type.startsWith('image/'));
+  if (images.length === 0) {
+    attachmentGallery.hidden = true;
+    galleryTrack.innerHTML = '';
+    return;
+  }
+  const savedScroll = galleryTrack.scrollLeft;
+  galleryTrack.innerHTML = '';
+  for (const att of images) {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(att.blob);
+    img.alt = att.name;
+    attachmentThumbUrls.push(img.src);
+    galleryTrack.appendChild(img);
+  }
+  attachmentGallery.hidden = false;
+  galleryTrack.scrollLeft = savedScroll;
+  updateGalleryState();
+}
+
+/**
+ * Syncs the gallery counter and prev/next visibility with the current
+ * scroll position. Runs on scroll (native swipe / trackpad / keyboard)
+ * and after each re-render.
+ */
+function updateGalleryState() {
+  const n = galleryTrack.children.length;
+  if (n === 0) return;
+  const step = galleryTrack.clientWidth + GALLERY_GAP;
+  const i = Math.min(n - 1, Math.max(0, Math.round(galleryTrack.scrollLeft / step)));
+  galleryCounter.textContent = `${i + 1} / ${n}`;
+  galleryPrev.hidden = i === 0;
+  galleryNext.hidden = i === n - 1;
+}
+
+// Gallery navigation: the arrows step exactly one slide. Native swipe
+// (mobile), trackpad/shift+scroll (desktop) and keyboard (the track is
+// focusable) all work directly on the track; the scroll listener keeps
+// the counter and arrows in sync with any of them.
+galleryTrack.addEventListener('scroll', updateGalleryState, { passive: true });
+function scrollGallery(dir) {
+  const reduceMotion = document.documentElement.classList.contains('reduce-motion');
+  galleryTrack.scrollBy({
+    left: dir * (galleryTrack.clientWidth + GALLERY_GAP),
+    behavior: reduceMotion ? 'auto' : 'smooth'
+  });
+}
+galleryPrev.addEventListener('click', () => scrollGallery(-1));
+galleryNext.addEventListener('click', () => scrollGallery(1));
 
 attachmentInput.addEventListener('change', () => {
   for (const file of attachmentInput.files) {
@@ -1511,6 +1686,45 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
   completedPage = 1;
   updateFooter();
   updateFilterButtons();
+}
+
+/**
+ * Toggles a subtask's done state from the details panel.
+ * Persists the todo and updates the panel item, heading, and N/M badge in place
+ * (a full item rebuild would collapse the open panel).
+ * @param {number} todoId
+ * @param {string} subtaskId
+ * @returns {Promise<void>}
+ */
+async function toggleSubtask(todoId, subtaskId) {
+  const todo = active.find(t => t.id === todoId) || completed.find(t => t.id === todoId);
+  if (!todo || !todo.subtasks) return;
+  const subtask = todo.subtasks.find(s => s.id === subtaskId);
+  if (!subtask) return;
+
+  subtask.done = !subtask.done;
+  await dbPut(todo);
+
+  const doneCount = todo.subtasks.filter(s => s.done).length;
+  const el = document.querySelector(`li[data-id="${todoId}"]`);
+  if (!el) return;
+
+  const stItem = el.querySelector(`.subtask-item[data-subtask-id="${subtaskId}"]`);
+  if (stItem) {
+    stItem.classList.toggle('done', subtask.done);
+    stItem.title = subtask.done ? 'Mark as not done' : 'Mark as done';
+    const stCheck = stItem.querySelector('.subtask-check');
+    if (stCheck) stCheck.textContent = subtask.done ? '✓' : '○';
+  }
+
+  const stHeading = el.querySelector('.subtasks-section .extras-heading');
+  if (stHeading) stHeading.textContent = `Subtasks (${doneCount}/${todo.subtasks.length})`;
+
+  const stBadge = el.querySelector('.badge.subtasks');
+  if (stBadge) {
+    stBadge.textContent = `${doneCount}/${todo.subtasks.length}`;
+    stBadge.title = `${doneCount} of ${todo.subtasks.length} subtasks done`;
+  }
 }
 
 /**
@@ -1820,6 +2034,18 @@ todoList.addEventListener('click', (e) => {
     case 'edit':
       const editTodo = active.find(t => t.id === id) || completed.find(t => t.id === id);
       if (editTodo) openEditDialog(editTodo);
+      break;
+    case 'expand-extras': {
+      const item = actionEl.closest('.todo-item');
+      if (item) {
+        const expanded = item.classList.toggle('expanded');
+        item.querySelectorAll('.expand-btn').forEach(btn => btn.setAttribute('aria-expanded', String(expanded)));
+      }
+      break;
+    }
+    case 'toggle-subtask':
+      // Subtask ids are string UUIDs (newId()), not numbers
+      toggleSubtask(id, actionEl.dataset.subtaskId);
       break;
     case 'restore':
       restoreTrash(id);
