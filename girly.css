@@ -216,9 +216,15 @@ body::before {
 
 /* ── Settings Button ────────────────────────────────────────── */
 
+.settings-btn,
+.filter-toggle {
+  transition: all var(--transition-base);
+  background: linear-gradient(145deg, #fff5f9, #ffe4e9);
+}
+
 .settings-btn:hover {
-  background: linear-gradient(145deg, #ffd6e0, #ffc4d0);
-  box-shadow: 0 4px 16px rgba(255, 154, 162, 0.3);
+  background: linear-gradient(145deg, #ffe4e9, #ffd6e0);
+  transform: translateY(-2px);
 }
 
 /* ── Responsive ─────────────────────────────────────────────── */
@@ -412,7 +418,8 @@ body::before {
 }
 
 .filter-toggle:hover {
-  background: linear-gradient(145deg, #ffd6e0, #ffc4d0);
+  background: linear-gradient(145deg, #ffe4e9, #ffd6e0);
+  transform: translateY(-2px);
 }
 
 .filter-toggle.active {
