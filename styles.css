@@ -99,6 +99,8 @@ body {
   --badge-subtasks-fg: #27ae60;
   --badge-attachments-bg: #eaf6ff;
   --badge-attachments-fg: #3498db;
+  --badge-images-bg: #f3ecfb;
+  --badge-images-fg: #8e44ad;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 4px;
@@ -943,7 +945,7 @@ body {
 
 /* ── Filters ────────────────────────────────────────────────── */
 
-.filter-bar {
+.button-bar {
   display: flex;
   gap: var(--gap-sm);
   padding-bottom: 8px;
@@ -986,13 +988,10 @@ body {
   background: var(--color-border-lighter);
   color: var(--color-text-secondary);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: background var(--transition-base), transform var(--transition-base);
   flex-shrink: 0;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .filter-toggle:hover {
@@ -1126,7 +1125,7 @@ body {
 
 .todo-item .text-area {
   flex: 1;
-  min-width: 0;
+  min-width: 250px;
 }
 
 .todo-item .text {
@@ -1145,40 +1144,6 @@ body {
   gap: 6px;
   margin-top: 4px;
   flex-wrap: wrap;
-}
-
-/* Inline attachment thumbnails (collapsed row) */
-.todo-item .thumb-strip {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.todo-item .thumb-strip img {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  cursor: pointer;
-}
-
-.todo-item .thumb-strip .thumb-more {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-border-lighter);
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.todo-item.trash-item .thumb-strip img {
-  cursor: default;
 }
 
 .badge {
@@ -1203,6 +1168,7 @@ body {
 .badge.note { background: var(--badge-note-bg); color: var(--badge-note-fg); }
 .badge.subtasks { background: var(--badge-subtasks-bg); color: var(--badge-subtasks-fg); }
 .badge.attachments { background: var(--badge-attachments-bg); color: var(--badge-attachments-fg); }
+.badge.images { background: var(--badge-images-bg); color: var(--badge-images-fg); }
 
 /* ── Item actions (badges + Details expand + Edit) ──────────── */
 
@@ -1210,7 +1176,9 @@ body {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex-shrink: 0;
+  flex: 1 0;
+  padding-left:40px;
+  justify-content: end;
 }
 
 /* Wider gap between the info badges and the action buttons */
@@ -1322,6 +1290,20 @@ body {
 
 .task-extras .subtask-item.done .subtask-text {
   text-decoration: line-through;
+}
+
+.task-extras .image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-extras .image-grid img {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
 }
 
 .todo-item .timestamps {

@@ -823,55 +823,24 @@ function checkTasks() {
 const lastUrgencyMap = new Map();
 
 /**
- * Builds the inline thumbnail strip for a todo's image attachments.
- * Shows up to 3 thumbnails plus a "+N" chip. When clickable (active /
- * completed views), clicking opens the edit dialog, whose gallery shows
- * every image. Object URLs are tracked on the <li> (li._thumbUrls) and
- * revoked via revokeTodoThumbs() when the item leaves the DOM.
+ * Image attachments (MIME type starts with "image/").
  * @param {Object} todo - The todo object
- * @param {HTMLElement} li - The <li> the strip will live in (URL registry)
- * @param {boolean} clickable - Whether clicking opens the edit dialog
- * @returns {HTMLElement|null} The strip, or null when there are no images
+ * @returns {Array} The image attachments (empty array when there are none)
  */
-function buildThumbStrip(todo, li, clickable) {
-  const images = (todo.attachments || []).filter(a => a.type && a.type.startsWith('image/'));
-  if (images.length === 0) return null;
-
-  const strip = document.createElement('div');
-  strip.className = 'thumb-strip';
-  const urls = [];
-  const MAX_THUMBS = 3;
-  for (const att of images.slice(0, MAX_THUMBS)) {
-    const img = document.createElement('img');
-    const url = URL.createObjectURL(att.blob);
-    urls.push(url);
-    img.src = url;
-    img.alt = att.name;
-    img.loading = 'lazy';
-    strip.appendChild(img);
-  }
-  if (images.length > MAX_THUMBS) {
-    const more = document.createElement('span');
-    more.className = 'thumb-more';
-    more.textContent = `+${images.length - MAX_THUMBS}`;
-    strip.appendChild(more);
-  }
-  if (clickable) {
-    strip.addEventListener('click', () => openEditDialog(todo));
-  }
-  li._thumbUrls = urls;
-  return strip;
+function imageAttachments(todo) {
+  return (todo.attachments || []).filter(a => a.type && a.type.startsWith('image/'));
 }
 
 /**
- * Revokes the thumbnail object URLs held by a todo <li> (if any).
- * Called whenever the item is removed from or replaced in the DOM.
+ * Revokes the object URLs held by a todo <li> (if any) — used by the
+ * images section in the Details panel. Called whenever the item is
+ * removed from or replaced in the DOM.
  * @param {HTMLElement} el - The todo <li>
  */
-function revokeTodoThumbs(el) {
-  if (el._thumbUrls) {
-    for (const url of el._thumbUrls) URL.revokeObjectURL(url);
-    el._thumbUrls = null;
+function revokeTodoUrls(el) {
+  if (el._urls) {
+    for (const url of el._urls) URL.revokeObjectURL(url);
+    el._urls = null;
   }
 }
 
@@ -914,8 +883,6 @@ function buildItem(todo, view) {
 
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
-    const trashStrip = buildThumbStrip(todo, li, false);
-    if (trashStrip) textArea.appendChild(trashStrip);
 
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'trash-actions';
@@ -981,13 +948,12 @@ function buildItem(todo, view) {
 
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
-    const strip = buildThumbStrip(todo, li, true);
-    if (strip) textArea.appendChild(strip);
 
     // Right-side extras: plain badges + Details expand button + Edit button
     const hasNotes = Boolean(todo.notes);
     const hasSubtasks = Boolean(todo.subtasks && todo.subtasks.length);
     const hasAttachments = Boolean(todo.attachments && todo.attachments.length);
+    const images = imageAttachments(todo);
     const doneCount = todo.subtasks ? todo.subtasks.filter(s => s.done).length : 0;
 
     const actions = document.createElement('div');
@@ -1017,7 +983,15 @@ function buildItem(todo, view) {
       actions.appendChild(attBadge);
     }
 
-    if (hasNotes || hasSubtasks || hasAttachments) {
+    if (images.length > 0) {
+      const imgBadge = document.createElement('span');
+      imgBadge.className = 'badge images';
+      imgBadge.textContent = `🖼️ ${images.length}`;
+      imgBadge.title = 'View images in Details';
+      actions.appendChild(imgBadge);
+    }
+
+    if (hasNotes || hasSubtasks || images.length > 0) {
       const expandBtn = document.createElement('button');
       expandBtn.className = 'item-action expand-btn';
       expandBtn.textContent = 'Details';
@@ -1036,7 +1010,7 @@ function buildItem(todo, view) {
 
     li.append(checkbox, textArea, actions);
 
-    if (hasNotes || hasSubtasks || hasAttachments) {
+    if (hasNotes || hasSubtasks || images.length > 0) {
       const extras = document.createElement('div');
       extras.className = 'task-extras';
 
@@ -1081,30 +1055,27 @@ function buildItem(todo, view) {
         extras.appendChild(stSection);
       }
 
-      if (hasAttachments) {
-        const attSection = document.createElement('div');
-        attSection.className = 'extras-section';
-        const attHeading = document.createElement('div');
-        attHeading.className = 'extras-heading';
-        attHeading.textContent = `Attachments (${todo.attachments.length})`;
-        const attList = document.createElement('ul');
-        attList.className = 'attachment-list';
-        for (const att of todo.attachments) {
-          const attItem = document.createElement('li');
-          attItem.className = 'attachment-item';
-          const attName = document.createElement('span');
-          attName.className = 'attachment-name';
-          attName.textContent = att.name;
-          attName.title = 'Download';
-          attName.addEventListener('click', () => downloadBlob(att.blob, att.name));
-          const attSize = document.createElement('span');
-          attSize.className = 'attachment-size';
-          attSize.textContent = formatBytes(att.size);
-          attItem.append(attName, attSize);
-          attList.appendChild(attItem);
+      if (images.length > 0) {
+        const imgSection = document.createElement('div');
+        imgSection.className = 'extras-section';
+        const imgHeading = document.createElement('div');
+        imgHeading.className = 'extras-heading';
+        imgHeading.textContent = `Images (${images.length})`;
+        const imgGrid = document.createElement('div');
+        imgGrid.className = 'image-grid';
+        const urls = [];
+        for (const att of images) {
+          const img = document.createElement('img');
+          const url = URL.createObjectURL(att.blob);
+          urls.push(url);
+          img.src = url;
+          img.alt = att.name;
+          img.loading = 'lazy';
+          imgGrid.appendChild(img);
         }
-        attSection.append(attHeading, attList);
-        extras.appendChild(attSection);
+        li._urls = urls;
+        imgSection.append(imgHeading, imgGrid);
+        extras.appendChild(imgSection);
       }
 
       li.appendChild(extras);
@@ -1186,12 +1157,12 @@ function updateTodoInDOM(todo) {
   if (!el) return;
   const view = el.classList.contains('completed') ? 'completed' : 'active';
   if (!matchesFilters(todo, view === 'active')) {
-    revokeTodoThumbs(el);
+    revokeTodoUrls(el);
     el.remove();
     return;
   }
   const newEl = buildItem(todo, view);
-  revokeTodoThumbs(el);
+  revokeTodoUrls(el);
   el.replaceWith(newEl);
 }
 
@@ -1206,7 +1177,7 @@ function removeTodoFromDOM(id) {
   const el = document.querySelector(`li[data-id="${id}"]`);
   if (!el) return;
   const dispose = () => {
-    revokeTodoThumbs(el);
+    revokeTodoUrls(el);
     el.remove();
   };
   if (document.documentElement.classList.contains('reduce-motion')) {
@@ -1228,8 +1199,8 @@ function removeTodoFromDOM(id) {
 function render() {
   const activeList = document.getElementById('active-list');
   const completedList = document.getElementById('completed-list');
-  activeList.querySelectorAll('li.todo-item').forEach(revokeTodoThumbs);
-  completedList.querySelectorAll('li.todo-item').forEach(revokeTodoThumbs);
+  activeList.querySelectorAll('li.todo-item').forEach(revokeTodoUrls);
+  completedList.querySelectorAll('li.todo-item').forEach(revokeTodoUrls);
   activeList.innerHTML = '';
   completedList.innerHTML = '';
   todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
@@ -1351,7 +1322,7 @@ function updateFooter(completedTotal, completedPages) {
  * Renders trash items in the settings panel with pagination.
  */
 function renderSettingsTrash() {
-  settingsDeletedList.querySelectorAll('li.todo-item').forEach(revokeTodoThumbs);
+  settingsDeletedList.querySelectorAll('li.todo-item').forEach(revokeTodoUrls);
   settingsDeletedList.innerHTML = '';
   const trashTotal = deleted.length;
   const trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
@@ -1959,7 +1930,7 @@ async function permanentDeleteTrash(id) {
       settingsDeletedList.appendChild(replacementEl);
     }
 
-    revokeTodoThumbs(trashItem);
+    revokeTodoUrls(trashItem);
     trashItem.remove();
   }
 

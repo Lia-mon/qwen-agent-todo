@@ -390,7 +390,7 @@ body::before {
 
 /* ── Filters ────────────────────────────────────────────────── */
 
-.filter-bar {
+.button-bar {
   gap: var(--gap-sm);
   padding-bottom: 8px;
   border-bottom-style: dashed;
@@ -619,4 +619,3 @@ body::before {
   color: var(--color-text-muted);
   font-weight: 500;
 }
-
