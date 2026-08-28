@@ -823,6 +823,59 @@ function checkTasks() {
 const lastUrgencyMap = new Map();
 
 /**
+ * Builds the inline thumbnail strip for a todo's image attachments.
+ * Shows up to 3 thumbnails plus a "+N" chip. When clickable (active /
+ * completed views), clicking opens the edit dialog, whose gallery shows
+ * every image. Object URLs are tracked on the <li> (li._thumbUrls) and
+ * revoked via revokeTodoThumbs() when the item leaves the DOM.
+ * @param {Object} todo - The todo object
+ * @param {HTMLElement} li - The <li> the strip will live in (URL registry)
+ * @param {boolean} clickable - Whether clicking opens the edit dialog
+ * @returns {HTMLElement|null} The strip, or null when there are no images
+ */
+function buildThumbStrip(todo, li, clickable) {
+  const images = (todo.attachments || []).filter(a => a.type && a.type.startsWith('image/'));
+  if (images.length === 0) return null;
+
+  const strip = document.createElement('div');
+  strip.className = 'thumb-strip';
+  const urls = [];
+  const MAX_THUMBS = 3;
+  for (const att of images.slice(0, MAX_THUMBS)) {
+    const img = document.createElement('img');
+    const url = URL.createObjectURL(att.blob);
+    urls.push(url);
+    img.src = url;
+    img.alt = att.name;
+    img.loading = 'lazy';
+    strip.appendChild(img);
+  }
+  if (images.length > MAX_THUMBS) {
+    const more = document.createElement('span');
+    more.className = 'thumb-more';
+    more.textContent = `+${images.length - MAX_THUMBS}`;
+    strip.appendChild(more);
+  }
+  if (clickable) {
+    strip.addEventListener('click', () => openEditDialog(todo));
+  }
+  li._thumbUrls = urls;
+  return strip;
+}
+
+/**
+ * Revokes the thumbnail object URLs held by a todo <li> (if any).
+ * Called whenever the item is removed from or replaced in the DOM.
+ * @param {HTMLElement} el - The todo <li>
+ */
+function revokeTodoThumbs(el) {
+  if (el._thumbUrls) {
+    for (const url of el._thumbUrls) URL.revokeObjectURL(url);
+    el._thumbUrls = null;
+  }
+}
+
+/**
  * Builds a DOM element for a single todo item.
  * Extracted from render() for targeted DOM updates.
  * @param {Object} todo - The todo object
@@ -861,6 +914,8 @@ function buildItem(todo, view) {
 
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
+    const trashStrip = buildThumbStrip(todo, li, false);
+    if (trashStrip) textArea.appendChild(trashStrip);
 
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'trash-actions';
@@ -926,6 +981,8 @@ function buildItem(todo, view) {
 
     textArea.append(textEl, meta);
     textArea.appendChild(buildTimestamps(todo));
+    const strip = buildThumbStrip(todo, li, true);
+    if (strip) textArea.appendChild(strip);
 
     // Right-side extras: plain badges + Details expand button + Edit button
     const hasNotes = Boolean(todo.notes);
@@ -1129,10 +1186,12 @@ function updateTodoInDOM(todo) {
   if (!el) return;
   const view = el.classList.contains('completed') ? 'completed' : 'active';
   if (!matchesFilters(todo, view === 'active')) {
+    revokeTodoThumbs(el);
     el.remove();
     return;
   }
   const newEl = buildItem(todo, view);
+  revokeTodoThumbs(el);
   el.replaceWith(newEl);
 }
 
@@ -1146,12 +1205,16 @@ function updateTodoInDOM(todo) {
 function removeTodoFromDOM(id) {
   const el = document.querySelector(`li[data-id="${id}"]`);
   if (!el) return;
-  if (document.documentElement.classList.contains('reduce-motion')) {
+  const dispose = () => {
+    revokeTodoThumbs(el);
     el.remove();
+  };
+  if (document.documentElement.classList.contains('reduce-motion')) {
+    dispose();
     return;
   }
-  el.addEventListener('transitionend', () => el.remove(), { once: true });
-  setTimeout(() => el.remove(), 400);
+  el.addEventListener('transitionend', dispose, { once: true });
+  setTimeout(dispose, 400);
   el.classList.add('removing');
 }
 
@@ -1165,6 +1228,8 @@ function removeTodoFromDOM(id) {
 function render() {
   const activeList = document.getElementById('active-list');
   const completedList = document.getElementById('completed-list');
+  activeList.querySelectorAll('li.todo-item').forEach(revokeTodoThumbs);
+  completedList.querySelectorAll('li.todo-item').forEach(revokeTodoThumbs);
   activeList.innerHTML = '';
   completedList.innerHTML = '';
   todoList.className = VIEW_CLASS_MAP[statusFilter] || '';
@@ -1286,6 +1351,7 @@ function updateFooter(completedTotal, completedPages) {
  * Renders trash items in the settings panel with pagination.
  */
 function renderSettingsTrash() {
+  settingsDeletedList.querySelectorAll('li.todo-item').forEach(revokeTodoThumbs);
   settingsDeletedList.innerHTML = '';
   const trashTotal = deleted.length;
   const trashPages = Math.max(1, Math.ceil(trashTotal / PAGE_SIZE));
@@ -1893,6 +1959,7 @@ async function permanentDeleteTrash(id) {
       settingsDeletedList.appendChild(replacementEl);
     }
 
+    revokeTodoThumbs(trashItem);
     trashItem.remove();
   }
 

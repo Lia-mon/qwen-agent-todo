@@ -1147,6 +1147,40 @@ body {
   flex-wrap: wrap;
 }
 
+/* Inline attachment thumbnails (collapsed row) */
+.todo-item .thumb-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.todo-item .thumb-strip img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.todo-item .thumb-strip .thumb-more {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.todo-item.trash-item .thumb-strip img {
+  cursor: default;
+}
+
 .badge {
   font-size: 0.7rem;
   padding: 2px 8px;
