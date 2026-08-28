@@ -424,22 +424,20 @@ body {
 /* ── Settings Button ────────────────────────────────────────── */
 
 .settings-btn {
-  width: 40px;
   height: 40px;
+  padding: 0 16px;
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background var(--transition-base), transform var(--transition-base);
   flex-shrink: 0;
-  font-size: 1.2rem;
-}
-
-.settings-btn::before {
-  content: '⚙';
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .settings-btn:hover {
@@ -508,6 +506,19 @@ body {
   flex-direction: column;
   padding: 24px;
   gap: 12px;
+}
+
+/* Must come after the base #add-task-dialog rule above so it wins
+   the cascade on small screens (same specificity, later source order). */
+@media (max-width: 600px) {
+  #add-task-dialog {
+    border-radius: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
 }
 
 .dialog-title {
@@ -968,22 +979,20 @@ body {
 }
 
 .filter-toggle {
-  width: 40px;
   height: 40px;
+  padding: 0 16px;
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-border-lighter);
+  color: var(--color-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background var(--transition-base), transform var(--transition-base);
   flex-shrink: 0;
-  font-size: 1.2rem;
-}
-
-.filter-toggle::before {
-  content: '🔍';
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .filter-toggle:hover {
@@ -1073,6 +1082,15 @@ body {
   border-bottom: 1px solid var(--color-border-light);
   animation: fadeIn var(--transition-base) ease;
   flex-wrap: wrap;
+  transition: opacity var(--transition-base) ease, transform var(--transition-base) ease;
+}
+
+/* Exit animation when a task is completed — JS adds the class,
+   removes the element on transitionend (with a timeout fallback). */
+.todo-item.removing {
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
 }
 
 @keyframes fadeIn {

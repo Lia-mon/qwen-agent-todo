@@ -23,8 +23,8 @@
             <button id="add-btn" class="add-btn" title="Add Task">+</button>
             <button class="status-btn active" data-filter="active">Active</button>
             <button class="status-btn" data-filter="completed">Completed</button>
-            <button id="filter-toggle" class="filter-toggle" title="Filters"></button>
-            <button id="settings-btn" class="settings-btn" title="Settings"></button>
+            <button id="filter-toggle" class="filter-toggle">Filters</button>
+            <button id="settings-btn" class="settings-btn">Settings</button>
         </div>
         <div class="filters">
             <div class="filter-group">
@@ -156,10 +156,9 @@
         </div>
     </dialog>
 
-    <!-- ── Add Task Dialog ──────────────────────────────────────── -->
+    <!-- ── Add / Edit Task Dialog ──────────────────────────────────────── -->
     <dialog id="add-task-dialog" aria-modal="true">
         <form id="todo-form">
-        <h3 class="dialog-title" id="dialog-task-title">New Task</h3>
         <input type="text" id="todo-input" placeholder="What needs to be done?" required>
 
         <div class="dialog-fields">

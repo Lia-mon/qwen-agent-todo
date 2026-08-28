@@ -110,9 +110,6 @@ const dialogCancel = document.getElementById('dialog-cancel');
 const dialogDelete = document.getElementById('dialog-delete');
 
 /** @type {HTMLElement} */
-const dialogTitle = document.querySelector('#dialog-task-title');
-
-/** @type {HTMLElement} */
 const dialogSubmit = document.querySelector('.dialog-submit');
 
 /** @type {HTMLButtonElement} */
@@ -1140,15 +1137,22 @@ function updateTodoInDOM(todo) {
 }
 
 /**
- * Removes a todo element from its list. Fire-and-forget — the
- * animation runs asynchronously and the element is cleaned up
- * when the transition completes (or after a 250ms fallback).
+ * Removes a todo element from its list. The element fades and
+ * shrinks out via the `.removing` class and is removed on
+ * `transitionend` (with a 400ms fallback in case the event never
+ * fires). Reduce-motion skips the animation.
  * @param {number} id - Todo ID
  */
 function removeTodoFromDOM(id) {
   const el = document.querySelector(`li[data-id="${id}"]`);
   if (!el) return;
-  el.remove();
+  if (document.documentElement.classList.contains('reduce-motion')) {
+    el.remove();
+    return;
+  }
+  el.addEventListener('transitionend', () => el.remove(), { once: true });
+  setTimeout(() => el.remove(), 400);
+  el.classList.add('removing');
 }
 
 
@@ -1605,7 +1609,6 @@ dialog.addEventListener('close', () => {
 
 function resetDialog() {
   editingTodoId = null;
-  dialogTitle.textContent = 'New Task';
   dialogSubmit.textContent = 'Add';
   dialogDelete.style.display = 'none';
   todoForm.reset();
@@ -1634,7 +1637,6 @@ function openEditDialog(todo) {
   dialogAttachments = (todo.attachments || []).map(a => ({ ...a }));
   renderDialogAttachments();
 
-  dialogTitle.textContent = 'Edit Task';
   dialogSubmit.textContent = 'Save';
   dialogDelete.style.display = 'inline-block';
 

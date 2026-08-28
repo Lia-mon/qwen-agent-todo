@@ -88,28 +88,10 @@ body::before {
   border: 1px solid var(--color-border-light);
 }
 
-.panel::before {
-  content: '🐔';
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 1.2rem;
-  opacity: 0.5;
-}
-
 .panel-title {
   color: var(--color-primary);
   letter-spacing: 1px;
   font-weight: 700;
-  position: relative;
-  padding-left: 24px;
-}
-
-.panel-title::before {
-  content: '🌻';
-  position: absolute;
-  left: 0;
-  top: 0;
 }
 
 .settings-tab {
@@ -153,18 +135,12 @@ body::before {
 }
 
 
-.settings-btn::before {
-  content: '🚜';
-}
 
 .status-btn {
   background: var(--color-border-lighter);
   font-weight: 600;
 }
 
-.filter-toggle::before {
-  content: '🌾';
-}
 
 .filter-btn {
   background: transparent;

@@ -129,9 +129,6 @@ body {
   color: #fff;
 }
 
-.settings-btn::before {
-  content: '🎩';
-}
 
 .add-btn {
   border-radius: var(--radius-sm);
@@ -153,9 +150,6 @@ body {
   border-radius: var(--radius-sm);
 }
 
-.filter-toggle::before {
-  content: '🔎';
-}
 
 .filter-btn {
   border-radius: var(--radius-sm);

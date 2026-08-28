@@ -98,30 +98,11 @@ body::before {
   box-shadow: none;
 }
 
-.panel::before {
-  content: '⛧';
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 1.2rem;
-  opacity: 0.3;
-  color: var(--color-danger);
-}
-
 .panel-title {
   color: var(--color-danger);
   letter-spacing: 3px;
   font-weight: 700;
   text-shadow: 0 0 10px rgba(139, 0, 0, 0.3);
-  position: relative;
-  padding-left: 24px;
-}
-
-.panel-title::before {
-  content: '☠';
-  position: absolute;
-  left: 0;
-  top: 0;
 }
 
 #settings-dialog {
@@ -214,9 +195,6 @@ body::before {
   border-radius: 0;
 }
 
-.settings-btn::before {
-  content: '⚜️';
-}
 
 .add-btn {
   border-radius: 0;
@@ -241,9 +219,6 @@ body::before {
   border-radius: 0;
 }
 
-.filter-toggle::before {
-  content: '🕯️';
-}
 
 .filter-btn {
   border-radius: 0;
