@@ -23,8 +23,8 @@
             <button id="add-btn" class="add-btn" title="Add Task">+</button>
             <button class="status-btn active" data-filter="active">Active</button>
             <button class="status-btn" data-filter="completed">Completed</button>
-            <button id="filter-toggle" class="filter-toggle">🔎</button>
-            <button id="settings-btn" class="settings-btn">⚙️</button>
+            <button id="filter-toggle" class="filter-toggle" aria-label="Filters">🔎</button>
+            <button id="settings-btn" class="settings-btn" aria-label="Settings">⚙️</button>
         </div>
         <div class="filters">
             <div class="filter-group">
@@ -113,7 +113,7 @@
             <button id="clear-data" class="settings-action-btn danger">Clear</button>
             </div>
         </div>
-        <div id="settings-personalization" class="settings-tab-content active">
+        <div id="settings-personalization" class="settings-tab-content">
             <div class="setting-row">
             <span>Theme</span>
             <div class="theme-buttons">
@@ -170,7 +170,6 @@
                 <option value="weekly">Weekly</option>
                 <option value="biweekly">Biweekly</option>
                 <option value="monthly">Monthly</option>
-                <option value="30s">30s (test)</option>
             </select>
             </label>
             <label>

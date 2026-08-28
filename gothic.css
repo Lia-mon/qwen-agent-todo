@@ -100,13 +100,6 @@ body::before {
   box-shadow: none;
 }
 
-.panel-title {
-  color: var(--color-danger);
-  letter-spacing: 3px;
-  font-weight: 700;
-  text-shadow: 0 0 10px rgba(139, 0, 0, 0.3);
-}
-
 #settings-dialog {
   border: 1px solid var(--color-border);
   box-shadow: none;
@@ -300,10 +293,6 @@ body::before {
   font-weight: 700;
 }
 
-.todo-item .delete-btn {
-  font-weight: 700;
-}
-
 .empty-state {
   font-family: inherit;
   letter-spacing: 1px;
@@ -316,11 +305,6 @@ body::before {
 
 .section {
   margin-bottom: 12px;
-}
-
-.section h3 {
-  letter-spacing: 2px;
-  font-weight: 700;
 }
 
 .section ul li {

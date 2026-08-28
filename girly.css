@@ -104,13 +104,6 @@ body::before {
   border: 2px solid rgba(255, 182, 193, 0.3);
 }
 
-.panel-title {
-  color: var(--color-primary);
-  letter-spacing: 2px;
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgba(214, 51, 132, 0.1);
-}
-
 /* ── Settings Dialog ────────────────────────────────────────── */
 
 #settings-dialog {
@@ -234,13 +227,9 @@ body::before {
     width: 44px;
     height: 44px;
   }
-
-  #add-task-dialog {
-    border-radius: 0;
-  }
 }
 
-/* ── Dialog Modal ───────────────────────────────────────────── */
+/* ── Dialog Modal ────────────────────────────────────────── */
 
 #add-task-dialog {
   border-radius: var(--radius-xl);
@@ -254,6 +243,14 @@ body::before {
 #add-task-dialog form {
   padding: 24px;
   gap: 14px;
+}
+
+/* Must come after the base #add-task-dialog rule above so it wins
+   the cascade on small screens (same specificity, later source order). */
+@media (max-width: 600px) {
+  #add-task-dialog {
+    border-radius: 0;
+  }
 }
 
 .dialog-title {
@@ -554,12 +551,6 @@ body::before {
   box-shadow: 0 4px 12px rgba(255, 107, 157, 0.3);
 }
 
-.todo-item .delete-btn {
-  color: var(--color-danger);
-  font-size: 1.4rem;
-  transition: opacity var(--transition-base), transform 0.5s;
-}
-
 .empty-state {
   padding: 32px 0;
   color: var(--color-text-muted);
@@ -574,18 +565,6 @@ body::before {
   border-top-style: dashed;
   border-color: rgba(255, 182, 193, 0.4);
   color: var(--color-text-muted);
-}
-
-/* ── Section-based layout ───────────────────────────────────── */
-
-.section h3 {
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom-style: dashed;
-  border-color: rgba(255, 182, 193, 0.3);
-  font-weight: 600;
 }
 
 /* ── Pagination ─────────────────────────────────────────────── */

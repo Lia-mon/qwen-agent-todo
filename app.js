@@ -110,7 +110,7 @@ const dialogCancel = document.getElementById('dialog-cancel');
 const dialogDelete = document.getElementById('dialog-delete');
 
 /** @type {HTMLElement} */
-const dialogSubmit = document.querySelector('.dialog-submit');
+const dialogSubmit = document.querySelector('#add-task-dialog .dialog-submit');
 
 /** @type {HTMLButtonElement} */
 const filterToggle = document.getElementById('filter-toggle');
@@ -1960,7 +1960,7 @@ async function permanentDeleteTrash(id) {
 let statusFilter = 'active';
 
 /** Maps status filter values to CSS view classes. */
-const VIEW_CLASS_MAP = { active: 'view-active', completed: 'view-completed', trash: 'view-deleted' };
+const VIEW_CLASS_MAP = { active: 'view-active', completed: 'view-completed' };
 
 /** @type {'all' | 'high' | 'medium' | 'low'} */
 let importanceFilter = 'all';
