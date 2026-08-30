@@ -102,6 +102,18 @@ const settingsDeletedList = document.getElementById('settings-deleted-list');
 /** @type {HTMLElement} */
 const settingsPagination = document.getElementById('settings-pagination');
 
+/** @type {HTMLDialogElement} */
+const confirmDialog = document.getElementById('confirm-dialog');
+
+/** @type {HTMLElement} */
+const confirmMessage = document.getElementById('confirm-message');
+
+/** @type {HTMLButtonElement} */
+const confirmCancel = document.getElementById('confirm-cancel');
+
+/** @type {HTMLButtonElement} */
+const confirmOk = document.getElementById('confirm-ok');
+
 /** Items per page for completed and trash views. */
 /** @type {HTMLButtonElement} */
 const dialogCancel = document.getElementById('dialog-cancel');
@@ -170,6 +182,33 @@ let completedPage = 1;
 
 /** @type {number} */
 let trashPage = 1;
+
+// ── Confirm Dialog ────────────────────────────────────────────
+
+/**
+ * Shows the confirm dialog and resolves with the user's choice.
+ * @param {string} message - The message shown in the dialog.
+ * @param {boolean} [danger] - Style the confirm button as a destructive action.
+ * @returns {Promise<boolean>} True if the user confirmed.
+ */
+function showConfirm(message, danger = false) {
+  return new Promise(resolve => {
+    confirmMessage.textContent = message;
+    confirmOk.classList.toggle('danger', danger);
+    confirmCancel.className = danger ? 'dialog-neutral' : 'dialog-cancel';
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      confirmDialog.close();
+      resolve(result);
+    };
+    confirmOk.onclick = () => settle(true);
+    confirmCancel.onclick = () => settle(false);
+    confirmDialog.onclose = () => settle(false);
+    confirmDialog.showModal();
+  });
+}
 
 /**
  * Inserts `item` into a sorted array at the correct position using binary search.
@@ -588,7 +627,7 @@ async function deleteProfile(id) {
   }
   const todoCount = await dbCountProfileTodos(id);
   const taskWord = todoCount === 1 ? 'task' : 'tasks';
-  if (!confirm(`Delete this profile and its ${todoCount} ${taskWord}? This cannot be undone.`)) return;
+  if (!(await showConfirm(`Delete this profile and its ${todoCount} ${taskWord}? This cannot be undone.`, true))) return;
   try {
     await dbDeleteProfileTodos(id);
     await dbDeleteProfile(id);
@@ -1933,8 +1972,6 @@ async function toggleTodo(id) {
  * @returns {Promise<void>}
  */
 async function deleteTodo(id) {
-  if (!confirm('Are you sure you want to delete this task?')) return;
-
   // Search in active first, then completed
   const activeIdx = active.findIndex(t => t.id === id);
   const completedIdx = completed.findIndex(t => t.id === id);
@@ -1992,7 +2029,7 @@ async function restoreTrash(id) {
  * @returns {Promise<void>}
  */
 async function permanentDeleteTrash(id) {
-  if (!confirm('Permanently delete this task? This cannot be undone.')) return;
+  if (!(await showConfirm('Permanently delete this task? This cannot be undone.', true))) return;
 
   const idx = deleted.findIndex(t => t.id === id);
   if (idx === -1) return;
@@ -2421,7 +2458,7 @@ async function importProfileData(e) {
 async function importProfileFile(data) {
   const name = (data.profile && data.profile.name) || 'Imported';
   const todoCount = Array.isArray(data.todos) ? data.todos.length : 0;
-  if (!confirm(`Add a new profile "${name}" with ${todoCount} ${todoCount === 1 ? 'task' : 'tasks'}? Existing data is not modified.`)) return;
+  if (!(await showConfirm(`Add a new profile "${name}" with ${todoCount} ${todoCount === 1 ? 'task' : 'tasks'}? Existing data is not modified.`))) return;
   try {
     const prepared = [];
     for (const todo of data.todos || []) {
@@ -2458,7 +2495,7 @@ async function importProfileFile(data) {
  * Restores a full backup: replaces all profiles and tasks.
  */
 async function restoreAllData(data) {
-  if (!confirm('Importing will replace ALL profiles and tasks. Continue?')) return;
+  if (!(await showConfirm('Importing will replace ALL profiles and tasks. Continue?', true))) return;
   try {
     const prepared = [];
     for (const todo of data.todos || []) {
@@ -2504,7 +2541,7 @@ async function restoreAllData(data) {
  * Legacy format ({active, completed, deleted}): overwrites the current profile.
  */
 async function importLegacyData(data) {
-  if (!confirm('Importing will overwrite all tasks in the current profile. Continue?')) return;
+  if (!(await showConfirm('Importing will overwrite all tasks in the current profile. Continue?', true))) return;
   try {
     // Restore attachments to Blobs before writing (async, so outside the transaction)
     const prepared = [];
@@ -2564,7 +2601,7 @@ async function importLegacyData(data) {
  * @returns {Promise<void>}
  */
 async function purgeAllTrash() {
-  if (!confirm('Permanently delete trashed tasks older than 30 days, across all profiles? This cannot be undone.')) return;
+  if (!(await showConfirm('Permanently delete trashed tasks older than 30 days, across all profiles? This cannot be undone.', true))) return;
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const tx = db.transaction(STORE_NAME, 'readwrite');
   const store = tx.objectStore(STORE_NAME);
@@ -2587,7 +2624,7 @@ async function purgeAllTrash() {
 }
 
 async function clearAllData() {
-  if (!confirm('Are you sure you want to clear ALL data? This cannot be undone.')) return;
+  if (!(await showConfirm('Are you sure you want to clear ALL data? This cannot be undone.', true))) return;
   active = [];
   completed = [];
   deleted = [];

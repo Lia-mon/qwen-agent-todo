@@ -1519,7 +1519,65 @@ body {
   padding: 0 24px 20px;
 }
 
-/* ── Profiles List ──────────────────────────────────────────── */
+/* ── Confirm Dialog ────────────────────────────────────────────── */
+
+#confirm-dialog {
+  border: none;
+  border-radius: var(--radius-xl);
+  padding: 0;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  margin: auto;
+}
+
+#confirm-dialog::backdrop {
+  background: var(--color-backdrop);
+  backdrop-filter: blur(4px);
+}
+
+#confirm-dialog h3 {
+  padding: 20px 24px 0;
+  margin: 0;
+}
+
+.confirm-message {
+  margin: 12px 24px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+#confirm-dialog .dialog-buttons {
+  padding: 0 24px 20px;
+}
+
+.dialog-neutral {
+  padding: 10px 20px;
+  font-size: 1rem;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.dialog-neutral:hover {
+  background: var(--color-hover);
+}
+
+.dialog-submit.danger {
+  background: var(--color-danger);
+}
+
+.dialog-submit.danger:hover {
+  background: var(--color-danger-hover);
+}
+
+/* ── Profiles List ────────────────────────────────────────────── */
 
 #settings-profiles-list {
   list-style: none;
