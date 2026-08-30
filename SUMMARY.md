@@ -6,6 +6,12 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 ---
 
+## Next Up
+
+**Rework of the repeatable task system.** Current mechanism: completing a repeatable task sets `nextRepeatDate = now + period`; `checkTasks()` re-emerges it once that timestamp passes. The periodic interval is disabled, so re-emergence only happens on page load (see Repeatable Tasks).
+
+---
+
 ## Files
 
 | File | Purpose |
@@ -103,18 +109,19 @@ clearAllData() → clears the entire todos store (all profiles)
 
 - **Add tasks** via dialog with text, repeat schedule, importance, duration, deadline, notes, subtasks, and file attachments
 - **Edit tasks** via the Edit button at the right of the item (same dialog, `editingTodoId` tracks mode)
+- **Dialog sizing** — on ≤600px viewports the add/edit dialog takes over the full screen (100dvh, no radius); the form scrolls internally (`flex: 1; min-height: 0; overflow-y: auto`) with a visible themed scrollbar — styled `::-webkit-scrollbar` forces a persistent scrollbar on mobile browsers that default to invisible overlays
 - **Notes** — free-form textarea in the dialog; a 📝 badge shows at the right of the list item
 - **Subtasks** — inline checklist in the dialog (add/check/remove); an `N/M` progress badge shows at the right of the list item; subtasks can also be toggled directly from the Details panel (persists via `dbPut`, updates badge/heading in place)
-- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a thumbnail preview); blobs stored on the todo, 📎 count badge at the right of the list item, click a name to download
-- **Details panel** — a Details button (shown when the item has notes, subtasks, or attachments) toggles an inline `.task-extras` panel showing the notes text, a tappable subtask checklist (✓/○), and the attachments (name + size, click to download); the chevron rotates to indicate the open state. Toggled via the `expand-extras` delegated action
-- **Complete tasks** by clicking the checkbox — moves from active to completed
+- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a gallery preview); blobs stored on the todo, 📎 count badge plus a 🖼️ image-count badge at the right of the list item (images viewable in the Details panel), click a name to download
+- **Details panel** — a Details button (shown when the item has notes, subtasks, or image attachments) toggles an inline `.task-extras` panel showing the notes text, a tappable subtask checklist (✓/○), and an Images section (grid of attached images) when present; attachments themselves (name + size, click to download) live only in the edit dialog. The chevron rotates to indicate the open state. Toggled via the `expand-extras` delegated action
+- **Complete tasks** by clicking the checkbox — fade+shrink exit animation (`.todo-item.removing`, element removed on `transitionend` with a timeout fallback), then moves from active to completed
 - **Delete tasks** (soft delete) — moves to trash, not permanently removed
 - **Restore from trash** — moves back to active or completed depending on prior state
 - **Permanent delete** — removes from IndexedDB, animated removal from trash list
 
 ### Repeatable Tasks
 
-Tasks can be set to repeat daily, weekly, biweekly, monthly, or a 30s test interval (dev-only — strip before shipping). When a repeatable task is completed, it disappears and re-emerges after its period elapses. `checkTasks()` runs once on init (interval disabled) to process re-emergence and urgency-based notifications.
+Tasks can be set to repeat daily, weekly, biweekly, or monthly. Completing a repeatable task sets `nextRepeatDate = now + period`; `checkTasks()` re-emerges it (back to active, `nextRepeatDate` advanced by one period) once that timestamp passes. Decompleting clears `nextRepeatDate`. `checkTasks()` runs once on init (periodic interval disabled), so re-emergence currently only happens on page load. **The repeatable task system is next up for rework.**
 
 ### Urgency System
 
@@ -216,5 +223,5 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 6. **`addTodo` prepends regardless of active filters** — a new task should appear immediately even if it doesn't match the current filter.
 7. **`clearAllData` clears the entire todos store** — all profiles, not just the current one; the confirm text says "ALL data" on purpose.
 8. **Subtask ids are UUID strings, todo/profile ids are numbers** — never `Number()` a subtask id.
-9. **`30s` repeat option is dev-only** — strip from `index.html` before shipping.
+9. **`30s` repeat value is legacy** — removed from the dialog's repeat options; `getRepeatMs` still maps it so existing tasks keep working.
 10. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.

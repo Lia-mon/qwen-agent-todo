@@ -714,22 +714,6 @@ function calculateUrgency(deadline, duration) {
   return 'balanced';
 }
 
-/**
- * Gets the repeat interval in milliseconds for a given schedule.
- * @param {string} repeat - Repeat schedule string.
- * @returns {number} Interval in milliseconds.
- */
-function getRepeatMs(repeat) {
-  switch (repeat) {
-    case 'daily': return 24 * 60 * 60 * 1000;
-    case 'weekly': return 7 * 24 * 60 * 60 * 1000;
-    case 'biweekly': return 14 * 24 * 60 * 60 * 1000;
-    case 'monthly': return 30 * 24 * 60 * 60 * 1000;
-    case '30s': return 30 * 1000;
-    default: return 0;
-  }
-}
-
 // ── Notification ──────────────────────────────────────────────
 
 /**
@@ -782,11 +766,10 @@ function sendForegroundNotification() {
 // ── Background Check ──────────────────────────────────────────
 
 /**
- * Tracks urgency changes and purges old trash.
- * Re-emergence of repeatable tasks is handled by runScheduledReemergence.
+ * Tracks urgency changes on active todos.
+ * Re-emergence is handled by runScheduledReemergence; trash purging by purgeOldTrash.
  */
 function checkTasks() {
-  const now = Date.now();
   let changed = false;
   const changes = [];
 
@@ -801,7 +784,27 @@ function checkTasks() {
     lastUrgencyMap.set(todo.id, urgency);
   });
 
-  // Auto-purge trash older than 30 days
+  if (changed) {
+    render();
+    sendGroupedNotification(changes);
+  }
+}
+
+// ── Trash Purge ───────────────────────────────────────────────
+
+const LAST_TRASH_PURGE_KEY = 'lastTrashPurge';
+
+/**
+ * Permanently deletes trash older than 30 days (current profile).
+ * Scheduled on the monthly cross (5am on the 1st): runs only when that
+ * moment has passed since the last run, which is stored in localStorage.
+ */
+function purgeOldTrash() {
+  const now = Date.now();
+  const lastRun = Number(localStorage.getItem(LAST_TRASH_PURGE_KEY)) || 0;
+  if (nextCrossMoment('monthly', lastRun) > now) return;
+  localStorage.setItem(LAST_TRASH_PURGE_KEY, String(now));
+
   const purged = [];
   for (let i = deleted.length - 1; i >= 0; i--) {
     const todo = deleted[i];
@@ -810,18 +813,13 @@ function checkTasks() {
       deleted.splice(i, 1);
     }
   }
+  if (purged.length === 0) return;
 
-  // Delete purged trash from the DB (the in-memory splice above doesn't persist).
-  if (purged.length > 0) {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    purged.forEach(todo => store.delete(todo.id));
-  }
-
-  if (changed) {
-    render();
-    sendGroupedNotification(changes);
-  }
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  const store = tx.objectStore(STORE_NAME);
+  purged.forEach(todo => store.delete(todo.id));
+  if (activeSettingsTab === 'trash') renderSettingsTrash();
+  console.log(`Trash purge: ${purged.length} item(s) purged`);
 }
 
 // ── Scheduled Re-emergence ────────────────────────────────────
@@ -1867,11 +1865,9 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
   todo.repeat = repeat || null;
   // Keep the pending re-emergence in sync with the (possibly changed) repeat.
   if (todo.completed === 1) {
-    if (todo.repeat) {
-      todo.nextRepeatDate = nextCrossMoment(todo.repeat, todo.completedAt || Date.now()) ?? Date.now() + getRepeatMs(todo.repeat);
-    } else {
-      delete todo.nextRepeatDate;
-    }
+    const next = nextCrossMoment(todo.repeat, todo.completedAt || Date.now());
+    if (next != null) todo.nextRepeatDate = next;
+    else delete todo.nextRepeatDate;
   }
   todo.importance = importance;
   todo.duration = duration;
@@ -1939,10 +1935,8 @@ async function toggleTodo(id) {
     // Complete: active → completed
     todo.completed = 1;
     todo.completedAt = Date.now();
-    if (todo.repeat) {
-      // Fixed calendar schedule; legacy values (e.g. '30s') fall back to the old offset.
-      todo.nextRepeatDate = nextCrossMoment(todo.repeat, Date.now()) ?? Date.now() + getRepeatMs(todo.repeat);
-    }
+    const next = nextCrossMoment(todo.repeat, Date.now());
+    if (next != null) todo.nextRepeatDate = next;
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
     binaryInsert(completed, todo, (a, b) => b.completedAt - a.completedAt);
@@ -2701,6 +2695,7 @@ async function init() {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
   checkTasks();
+  purgeOldTrash();
   // setInterval(() => {
   //   checkTasks();
   //   updateTimers();
