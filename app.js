@@ -767,7 +767,7 @@ function sendForegroundNotification() {
 
 /**
  * Tracks urgency changes on active todos.
- * Re-emergence is handled by runScheduledReemergence; trash purging by purgeOldTrash.
+ * Re-emergence is handled by runScheduledReemergence; trash purging is manual (Purge Trash button).
  */
 function checkTasks() {
   let changed = false;
@@ -790,37 +790,6 @@ function checkTasks() {
   }
 }
 
-// ── Trash Purge ───────────────────────────────────────────────
-
-const LAST_TRASH_PURGE_KEY = 'lastTrashPurge';
-
-/**
- * Permanently deletes trash older than 30 days (current profile).
- * Scheduled on the monthly cross (5am on the 1st): runs only when that
- * moment has passed since the last run, which is stored in localStorage.
- */
-function purgeOldTrash() {
-  const now = Date.now();
-  const lastRun = Number(localStorage.getItem(LAST_TRASH_PURGE_KEY)) || 0;
-  if (nextCrossMoment('monthly', lastRun) > now) return;
-  localStorage.setItem(LAST_TRASH_PURGE_KEY, String(now));
-
-  const purged = [];
-  for (let i = deleted.length - 1; i >= 0; i--) {
-    const todo = deleted[i];
-    if (todo.deletedAt && (now - todo.deletedAt) > 30 * 24 * 60 * 60 * 1000) {
-      purged.push(todo);
-      deleted.splice(i, 1);
-    }
-  }
-  if (purged.length === 0) return;
-
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  const store = tx.objectStore(STORE_NAME);
-  purged.forEach(todo => store.delete(todo.id));
-  if (activeSettingsTab === 'trash') renderSettingsTrash();
-  console.log(`Trash purge: ${purged.length} item(s) purged`);
-}
 
 // ── Scheduled Re-emergence ────────────────────────────────────
 
@@ -2589,6 +2558,34 @@ async function importLegacyData(data) {
   }
 }
 
+/**
+ * Permanently deletes trashed tasks older than 30 days, across all profiles.
+ * Syncs the current profile's in-memory trash list afterwards.
+ * @returns {Promise<void>}
+ */
+async function purgeAllTrash() {
+  if (!confirm('Permanently delete trashed tasks older than 30 days, across all profiles? This cannot be undone.')) return;
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const tx = db.transaction(STORE_NAME, 'readwrite');
+  const store = tx.objectStore(STORE_NAME);
+  const request = store.index('deleted').getAll(1);
+  request.onsuccess = () => {
+    request.result
+      .filter(t => t.deletedAt && t.deletedAt < cutoff)
+      .forEach(t => store.delete(t.id));
+  };
+  await new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  const before = deleted.length;
+  deleted = deleted.filter(t => !(t.deletedAt && t.deletedAt < cutoff));
+  if (before !== deleted.length) {
+    render();
+    console.log(`Trash purge: ${before - deleted.length} item(s) purged`);
+  }
+}
+
 async function clearAllData() {
   if (!confirm('Are you sure you want to clear ALL data? This cannot be undone.')) return;
   active = [];
@@ -2695,7 +2692,6 @@ async function init() {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
   checkTasks();
-  purgeOldTrash();
   // setInterval(() => {
   //   checkTasks();
   //   updateTimers();
@@ -2707,6 +2703,7 @@ async function init() {
   document.getElementById('import-data')?.addEventListener('change', importData);
   document.getElementById('import-profile-btn')?.addEventListener('click', () => document.getElementById('import-profile')?.click());
   document.getElementById('import-profile')?.addEventListener('change', importProfileData);
+  document.getElementById('purge-trash')?.addEventListener('click', purgeAllTrash);
   document.getElementById('clear-data')?.addEventListener('click', clearAllData);
   document.getElementById('notif-toggle')?.addEventListener('change', toggleNotifications);
   document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
