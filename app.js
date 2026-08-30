@@ -7,7 +7,7 @@
  * @property {number} completed - Completion flag: 0 (active) or 1 (completed)
  * @property {number} deleted - Deletion flag: 0 (active) or 1 (trashed)
  * @property {number | null} deletedAt - Unix timestamp when task was deleted (null if not deleted)
- * @property {string | null} repeat - Repeat schedule: 'daily' | 'weekly' | 'biweekly' | 'monthly' | '30s' | '' | null
+ * @property {string | null} repeat - Repeat schedule: 'daily' | 'weekly' | 'biweekly' (twice weekly) | 'monthly' | 'biyearly' | 'yearly' | '30s' (legacy) | '' | null
  * @property {string} notes - Free-form notes
  * @property {Array<{id: string, text: string, done: boolean}>} subtasks - Simple checklist
  * @property {Array<{id: string, name: string, type: string, size: number, blob: Blob}>} attachments - File attachments
@@ -124,7 +124,7 @@ const filtersPanel = document.querySelector('.filters');
 const DB_NAME = 'TodoAppDB';
 
 /** @type {number} */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** @type {string} */
 const STORE_NAME = 'todos';
@@ -201,6 +201,7 @@ function createStore(database) {
   store.createIndex('createdAt', 'createdAt', { unique: false });
   store.createIndex('completedAt', 'completedAt', { unique: false });
   store.createIndex('profileId', 'profileId', { unique: false });
+  store.createIndex('nextRepeatDate', 'nextRepeatDate', { unique: false });
 
   const profilesStore = database.createObjectStore(PROFILES_STORE_NAME, { keyPath: 'id', autoIncrement: true });
   profilesStore.createIndex('name', 'name', { unique: false });
@@ -240,6 +241,18 @@ function migrateToV2(database, tx) {
 }
 
 /**
+ * v2 → v3 migration: adds the 'nextRepeatDate' index to todos so due
+ * repeatable tasks can be queried without scanning the whole store.
+ * @param {IDBTransaction} tx - The versionchange transaction
+ */
+function migrateToV3(tx) {
+  const todosStore = tx.objectStore(STORE_NAME);
+  if (!todosStore.indexNames.contains('nextRepeatDate')) {
+    todosStore.createIndex('nextRepeatDate', 'nextRepeatDate', { unique: false });
+  }
+}
+
+/**
  * Handles database version upgrades.
  * @param {Event} event - The versionchange event
  */
@@ -253,6 +266,10 @@ function onUpgradeNeeded(event) {
 
   if (oldVersion < 2) {
     migrateToV2(database, event.target.transaction);
+  }
+
+  if (oldVersion < 3) {
+    migrateToV3(event.target.transaction);
   }
 }
 
@@ -455,6 +472,22 @@ function dbGetAllTodos() {
   });
 }
 
+/**
+ * Returns all todos whose `nextRepeatDate` is at or before `nowMs`, via
+ * the `nextRepeatDate` index (records without one are excluded).
+ * @param {number} nowMs - Upper bound (inclusive), ms since epoch.
+ * @returns {Promise<Object[]>}
+ */
+function dbGetDueTodos(nowMs) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const index = tx.objectStore(STORE_NAME).index('nextRepeatDate');
+    const request = index.getAll(IDBKeyRange.upperBound(nowMs));
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 /** @type {number | null} */
 let editingProfileId = null;
 
@@ -586,6 +619,7 @@ async function activateProfile(id) {
   ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((a, b) => b.completedAt - a.completedAt);
+  await runScheduledReemergence();
   completedPage = 1;
   trashPage = 1;
   lastUrgencyMap.clear();
@@ -748,33 +782,13 @@ function sendForegroundNotification() {
 // ── Background Check ──────────────────────────────────────────
 
 /**
- * Checks repeatable tasks for re-emergence, tracks urgency changes, and purges old trash.
- * Runs every 5 minutes via setInterval.
+ * Tracks urgency changes and purges old trash.
+ * Re-emergence of repeatable tasks is handled by runScheduledReemergence.
  */
 function checkTasks() {
   const now = Date.now();
   let changed = false;
   const changes = [];
-  const changedIds = new Set();
-  let purgedCount = 0;
-
-  // Check completed repeatable tasks for re-emergence.
-  // Iterate backwards: splicing during a forward loop would skip items
-  // that shift into the current index.
-  for (let i = completed.length - 1; i >= 0; i--) {
-    const todo = completed[i];
-    if (todo.repeat && todo.nextRepeatDate && now >= todo.nextRepeatDate) {
-      changes.push({ type: 're-emerged', text: todo.text });
-      todo.completed = 0;
-      todo.completedAt = null;
-      todo.nextRepeatDate = now + getRepeatMs(todo.repeat);
-      changed = true;
-      changedIds.add(todo.id);
-      // Move back to active
-      completed.splice(i, 1);
-      active.push(todo);
-    }
-  }
 
   // Urgency check on active todos only
   active.forEach(todo => {
@@ -788,33 +802,132 @@ function checkTasks() {
   });
 
   // Auto-purge trash older than 30 days
+  const purged = [];
   for (let i = deleted.length - 1; i >= 0; i--) {
     const todo = deleted[i];
     if (todo.deletedAt && (now - todo.deletedAt) > 30 * 24 * 60 * 60 * 1000) {
-      purgedCount++;
+      purged.push(todo);
       deleted.splice(i, 1);
     }
   }
 
-  // Persist changes to DB (changed items + purged trash in one transaction)
-  if (changedIds.size > 0 || purgedCount > 0) {
+  // Delete purged trash from the DB (the in-memory splice above doesn't persist).
+  if (purged.length > 0) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    for (const id of changedIds) {
-      const todo = active.find(t => t.id === id);
-      if (todo) store.put(todo);
-    }
-    deleted.forEach(todo => {
-      if (todo.deletedAt && (now - todo.deletedAt) > 30 * 24 * 60 * 60 * 1000) {
-        store.delete(todo.id);
-      }
-    });
+    purged.forEach(todo => store.delete(todo.id));
   }
 
   if (changed) {
     render();
     sendGroupedNotification(changes);
   }
+}
+
+// ── Scheduled Re-emergence ────────────────────────────────────
+
+/**
+ * Next fixed re-emergence moment for a todo's repeat value, strictly
+ * after `afterMs`, local time.
+ *
+ *   daily    - 5am, any calendar day
+ *   weekly   - 5am Sunday
+ *   biweekly - 5pm Wednesday or 5am Sunday, whichever is next
+ *   monthly  - 5am on the 1st of a month
+ *   biyearly - 5am Jul 1 or 5am Jan 1, whichever is next
+ *   yearly   - 5am Jan 1
+ *
+ * @param {string} repeat - The todo's repeat value.
+ * @param {number} afterMs - Lower bound (exclusive), ms since epoch.
+ * @returns {number | null} Timestamp of the next moment, or null for
+ *   repeat values outside the fixed schedule (e.g. legacy '30s').
+ */
+function nextCrossMoment(repeat, afterMs) {
+  const d = new Date(afterMs);
+
+  // next moment (strictly after afterMs): weekday wd at `hour`, local time
+  const nextWeekday = (wd, hour) => {
+    const t = new Date(d);
+    t.setHours(hour, 0, 0, 0);
+    t.setDate(t.getDate() + ((wd - t.getDay() + 7) % 7));
+    if (t.getTime() <= afterMs) t.setDate(t.getDate() + 7);
+    return t.getTime();
+  };
+
+  // next moment (strictly after afterMs): month m, day `day`, at 5am
+  const nextAnnual = (m, day) => {
+    let t = new Date(d.getFullYear(), m, day);
+    t.setHours(5, 0, 0, 0);
+    if (t.getTime() <= afterMs) {
+      t = new Date(d.getFullYear() + 1, m, day);
+      t.setHours(5, 0, 0, 0);
+    }
+    return t.getTime();
+  };
+
+  switch (repeat) {
+    case 'daily': {
+      const t = new Date(d);
+      t.setHours(5, 0, 0, 0);
+      if (t.getTime() <= afterMs) t.setDate(t.getDate() + 1);
+      return t.getTime();
+    }
+    case 'weekly':
+      return nextWeekday(0, 5);
+    case 'biweekly':
+      return Math.min(nextWeekday(3, 17), nextWeekday(0, 5));
+    case 'monthly': {
+      let t = new Date(d.getFullYear(), d.getMonth(), 1);
+      t.setHours(5, 0, 0, 0);
+      if (t.getTime() <= afterMs) {
+        t = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+        t.setHours(5, 0, 0, 0);
+      }
+      return t.getTime();
+    }
+    case 'biyearly':
+      return Math.min(nextAnnual(6, 1), nextAnnual(0, 1));
+    case 'yearly':
+      return nextAnnual(0, 1);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Re-emerges completed repeatable tasks whose `nextRepeatDate` has
+ * arrived — across all profiles. Each re-emerged task moves back to
+ * active; its `nextRepeatDate` is cleared and is re-set (on the fixed
+ * schedule, via nextCrossMoment) the next time the task is completed.
+ *
+ * Not wired into init()/intervals yet.
+ * @returns {Promise<void>}
+ */
+async function runScheduledReemergence() {
+  const now = Date.now();
+  const due = await dbGetDueTodos(now);
+  let reemerged = 0;
+  for (const todo of due) {
+    // The index only matches records that have a nextRepeatDate, but
+    // trashed completed repeatables keep theirs — skip those.
+    if (todo.deleted !== 0 || todo.completed !== 1 || !todo.repeat) continue;
+    todo.completed = 0;
+    todo.completedAt = null;
+    delete todo.nextRepeatDate;
+    await dbPut(todo);
+    reemerged++;
+    // Keep the current profile's in-memory arrays in sync.
+    const local = completed.find(t => t.id === todo.id);
+    if (!local) continue;
+    local.completed = 0;
+    local.completedAt = null;
+    delete local.nextRepeatDate;
+    completed.splice(completed.indexOf(local), 1);
+    binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
+  }
+  if (reemerged === 0) return;
+  render();
+  console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged`);
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -1752,6 +1865,14 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
 
   todo.text = text;
   todo.repeat = repeat || null;
+  // Keep the pending re-emergence in sync with the (possibly changed) repeat.
+  if (todo.completed === 1) {
+    if (todo.repeat) {
+      todo.nextRepeatDate = nextCrossMoment(todo.repeat, todo.completedAt || Date.now()) ?? Date.now() + getRepeatMs(todo.repeat);
+    } else {
+      delete todo.nextRepeatDate;
+    }
+  }
   todo.importance = importance;
   todo.duration = duration;
   todo.deadline = deadlineStr ? new Date(deadlineStr.replace(' ', 'T')).getTime() : null;
@@ -1819,8 +1940,8 @@ async function toggleTodo(id) {
     todo.completed = 1;
     todo.completedAt = Date.now();
     if (todo.repeat) {
-      const periodMs = getRepeatMs(todo.repeat);
-      todo.nextRepeatDate = Date.now() + periodMs;
+      // Fixed calendar schedule; legacy values (e.g. '30s') fall back to the old offset.
+      todo.nextRepeatDate = nextCrossMoment(todo.repeat, Date.now()) ?? Date.now() + getRepeatMs(todo.repeat);
     }
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
@@ -2575,6 +2696,7 @@ async function init() {
   ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((t1,t2)=>t2.completedAt - t1.completedAt);
+  await runScheduledReemergence();
   active.forEach(todo => {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
