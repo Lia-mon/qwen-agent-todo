@@ -8,7 +8,10 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 ## Next Up
 
-**Rework of the repeatable task system.** Current mechanism: completing a repeatable task sets `nextRepeatDate = now + period`; `checkTasks()` re-emerges it once that timestamp passes. The periodic interval is disabled, so re-emergence only happens on page load (see Repeatable Tasks).
+The repeatable task rework (fixed-schedule re-emergence) is implemented and merged. Open decisions:
+
+- **Periodic run while open** — re-emergence currently fires on page load and profile switch only. A dedicated `setInterval(runScheduledReemergence, 5min)` would let 5am crosses fire while the app is open (separate from the disabled `checkTasks` interval).
+- **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework in `report.md`).
 
 ---
 
@@ -16,8 +19,8 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, and add/edit dialog. Loads all CSS themes and the JS bundle. |
-| `app.js` | All application logic (~2600 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, profile management, data import/export. |
+| `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, add/edit dialog, and confirm dialog. Loads all CSS themes and the JS bundle. |
+| `app.js` | All application logic (~2800 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, profile management, data import/export. |
 | `styles.css` | Base styles and CSS custom properties (colors, radii, transitions, spacing). Defines the "Classic" theme. Includes base layout, components, badges, trash actions, pagination, and responsive breakpoints. |
 | `girly.css` | Pink/pastel theme override — rounded corners, soft shadows, pink accent colors. |
 | `suave.css` | Dark navy theme — sharp corners, no shadows, cool blue/red palette, Inter font. |
@@ -44,7 +47,7 @@ Todo {
   deadline: number | null   // Unix timestamp
   duration: string | null  // '5' | '10' | '30' | '60' | 'multi'
   importance: 'high' | 'medium' | 'low'
-  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | '30s' (dev-only) | ''
+  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'biyearly' | 'yearly' | '' ('30s' legacy-only)
   notes: string          // Free-form notes (dialog textarea)
   subtasks: Array<{id: string, text, done}>  // id is a UUID string (crypto.randomUUID) — unlike numeric todo/profile ids
   attachments: Array<{id, name, type, size, blob: Blob}>  // File attachments
@@ -52,7 +55,7 @@ Todo {
   completedAt: number | null
   deleted: number        // 0 = not deleted, 1 = trashed
   deletedAt: number | null
-  nextRepeatDate: number | null  // For repeatable tasks
+  nextRepeatDate: number  // Next fixed re-emergence moment; present only on completed repeatables, deleted (never nulled) otherwise
   profileId: number              // Owning profile (profiles store)
 }
 ```
@@ -68,8 +71,8 @@ Two boolean flags (`completed`, `deleted`) create four logical states:
 
 ### Storage
 
-- **IndexedDB** (version 2): `TodoAppDB` → `todos` store with indexes on `deleted`, `completed`, `createdAt`, `completedAt`, `profileId`; `profiles` store (`id` autoIncrement, `name`) with a `name` index
-- **Profiles**: each todo belongs to a profile via `profileId`. The v1 → v2 migration creates a 'Default' profile and assigns all legacy todos to it. Only the current profile's todos are loaded into memory; switching profiles (`loadProfile` → `activateProfile`) reloads that profile's todos, sorts them, resets pagination/urgency state, and persists the choice to `localStorage('activeProfile')`. `activateProfile(id)` is the shared body used by profile switching and full-data restore (it works even when the profile is already active). Deleting a profile hard-deletes its todos (active profile and last profile cannot be deleted)
+- **IndexedDB** (version 3): `TodoAppDB` → `todos` store with indexes on `deleted`, `completed`, `createdAt`, `completedAt`, `profileId`, `nextRepeatDate` (non-unique); `profiles` store (`id` autoIncrement, `name`) with a `name` index
+- **Profiles**: each todo belongs to a profile via `profileId`. The v1 → v2 migration creates a 'Default' profile and assigns all legacy todos to it; the v2 → v3 migration adds the `nextRepeatDate` index (existing DBs upgrade on next open). Only the current profile's todos are loaded into memory; switching profiles (`loadProfile` → `activateProfile`) reloads that profile's todos, sorts them, resets pagination/urgency state, and persists the choice to `localStorage('activeProfile')`. `activateProfile(id)` is the shared body used by profile switching and full-data restore (it works even when the profile is already active). Deleting a profile hard-deletes its todos (active profile and last profile cannot be deleted)
 - **In-memory arrays**: `active[]`, `completed[]`, `deleted[]` — the JS source of truth for the current profile, synced to IndexedDB
 - **localStorage**: Theme preference (`theme` key), active profile (`activeProfile` key)
 
@@ -82,7 +85,8 @@ init()
   ├── ensureStore() — recreate DB if a store is missing
   ├── resolveCurrentProfile() — pick saved/first profile, persist choice
   ├── dbGet(profileId) — load that profile's active/completed/deleted into memory
-  ├── checkTasks() — one-shot: handle repeatables & urgency changes
+  ├── runScheduledReemergence() — re-emerge due repeatables (all profiles)
+  ├── lastUrgencyMap seed → checkTasks() — one-shot urgency tracking
   ├── render() — build DOM from memory arrays
   └── event listeners setup
 
@@ -90,7 +94,7 @@ The `init()` call has a top-level `.catch()` that logs and alerts, so a failed
 open no longer leaves a silently blank page.
 
 addTodo() → dbAdd() → prepend item + updateFooter()
-toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter()
+toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter() (completing a repeatable sets nextRepeatDate on the fixed schedule)
 deleteTodo() → dbPut() → removeTodoFromDOM() + updateFooter() + renderSettingsTrash() (if trash tab open)
 restoreTrash() → dbPut() → render() (re-renders main list + trash tab)
 permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
@@ -99,6 +103,7 @@ exportData() → all profiles + all todos → JSON download
 importData() → dispatches on file format: 'all' → atomic wipe+restore, 'profile' → new profile, legacy → atomic wipe+write over current profile
 importProfileData() → accepts 'profile' files only → new profile, nothing overwritten
 clearAllData() → clears the entire todos store (all profiles)
+purgeAllTrash() → manual (Data Management): permanently deletes trash >30 days old, all profiles
 ```
 
 ---
@@ -121,7 +126,22 @@ clearAllData() → clears the entire todos store (all profiles)
 
 ### Repeatable Tasks
 
-Tasks can be set to repeat daily, weekly, biweekly, or monthly. Completing a repeatable task sets `nextRepeatDate = now + period`; `checkTasks()` re-emerges it (back to active, `nextRepeatDate` advanced by one period) once that timestamp passes. Decompleting clears `nextRepeatDate`. `checkTasks()` runs once on init (periodic interval disabled), so re-emergence currently only happens on page load. **The repeatable task system is next up for rework.**
+Repeatable tasks re-emerge on **fixed calendar crosses** (local time), not offset intervals:
+
+| Repeat (UI label) | Re-emerges at |
+|-------------------|---------------|
+| `daily` (Daily) | Every day, 5am |
+| `biweekly` (Twice Weekly) | Wednesday 5pm or Sunday 5am, whichever is next |
+| `weekly` (Weekly) | Sunday 5am |
+| `monthly` (Monthly) | 1st of the month, 5am |
+| `biyearly` (Twice Yearly) | Jul 1 5am or Jan 1 5am, whichever is next |
+| `yearly` (Yearly) | Jan 1 5am |
+
+- Completing a repeatable task sets `nextRepeatDate = nextCrossMoment(repeat, now)` — the next fixed moment strictly after completion. Decompleting or re-emerging **deletes** the field (never sets it to `null` — `null` is a valid IndexedDB key that would stay in the index).
+- `runScheduledReemergence()` re-emerges due tasks **across all profiles**: it scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`), moves each back to active (`completed = 0`, `completedAt = null`, field deleted), and re-renders. Runs on `init()` and on every `activateProfile()` (profile switch / full-data restore).
+- Editing a completed repeatable recomputes `nextRepeatDate` from `completedAt` (or deletes it if the repeat was removed).
+- Re-emerged tasks keep their original `createdAt` sort position (they don't jump to the top of the list).
+- Legacy `'30s'` repeat values have no fixed schedule: `nextCrossMoment` returns `null`, so completed legacy tasks re-emerge once at their stored `nextRepeatDate` (if any) and then stop repeating.
 
 ### Urgency System
 
@@ -131,7 +151,7 @@ Tasks can be set to repeat daily, weekly, biweekly, or monthly. Completing a rep
 - **Balanced**: Reasonable buffer between duration and deadline
 - **Lax**: Plenty of time relative to duration
 
-Urgency changes trigger grouped notifications (dormant while the interval is disabled; `lastUrgencyMap` seeds the baseline at init and on profile switch).
+`checkTasks()` (urgency tracking only) detects changes and triggers grouped notifications. Dormant while the periodic interval is disabled — it runs once on init; `lastUrgencyMap` seeds the baseline at init and on profile switch.
 
 ### Filtering
 
@@ -158,7 +178,7 @@ Five tabs in a `<dialog>` modal:
 | Tab | Contents |
 |-----|----------|
 | Notifications | Enable/disable browser notifications |
-| Data Management | Export JSON (all profiles + all todos), Import JSON (dispatched by file format), Import Profile (adds a new profile from a profile file), Clear All Data — all profiles (attachment blobs are serialized to base64 data URLs for export and restored to Blobs on import) |
+| Data Management | Export JSON (all profiles + all todos), Import JSON (dispatched by file format), Import Profile (adds a new profile from a profile file), Purge Trash (permanently deletes trash older than 30 days, all profiles), Clear All Data — all profiles (attachment blobs are serialized to base64 data URLs for export and restored to Blobs on import) |
 | Personalization | Theme selector (Classic/Girly/Suave/Gothic/Farm), Reduce Motion toggle |
 | Trash | Paginated list of deleted tasks with Restore / Delete Forever buttons |
 | Profiles | Add/Edit/Delete profiles; Load button switches the active profile (marked with an "Active" badge); per-row Export button downloads that profile's todos |
@@ -173,9 +193,9 @@ In the dark themes (`gothic`, `suave`), `--color-primary` is too dark to read as
 
 ### Notifications
 
-Browser Notification API. Grouped notifications for:
-- Task re-emergence (repeatable tasks)
-- Urgency changes
+Browser Notification API. Grouped notifications (`sendGroupedNotification`) support:
+- Task re-emergence (repeatable tasks) — currently not emitted; `runScheduledReemergence` logs only
+- Urgency changes — the only type currently emitted (via `checkTasks`)
 
 Notification click focuses or opens the app window (handled by SW).
 
@@ -206,6 +226,9 @@ Development strategy: **network-first** with stale-while-revalidate caching. Alw
 - `downloadBlob(blob, filename)` — object-URL download with a deferred (1s) revoke; single implementation for all three download sites (item, details panel, dialog)
 - `serializeAttachments()` / `deserializeAttachments()` — base64 data URLs for export/import round-trips
 - `activateProfile(id)` — shared profile-activation body (load, sort, reset pagination, re-seed `lastUrgencyMap`, render)
+- `nextCrossMoment(repeat, afterMs)` — next fixed re-emergence moment for a repeat value, strictly after `afterMs` (local time); `null` for values outside the schedule
+- `dbGetDueTodos(nowMs)` — `nextRepeatDate` index scan for records ≤ now
+- `showConfirm(message, danger)` — Promise-based confirm dialog (replaces `confirm()`); `danger` styles the confirm button as destructive
 
 ### Soft-Delete Pattern
 
@@ -216,12 +239,16 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 ## Known / Intentional Design Decisions
 
 1. **In-memory arrays as source of truth** — IndexedDB is the persistence layer, but JS arrays drive the UI. Manual DB edits will desync until page reload.
-2. **5-minute `checkTasks()` interval disabled** — Runs once on init only. Repeatable task processing and urgency timer updates are paused until re-enabled.
+2. **5-minute `checkTasks()` interval disabled** — `checkTasks` is urgency-only now and runs once on init. Urgency notifications are paused until the interval is re-enabled (see the deferred bundle in `report.md`).
 3. **Trash ignores filters** — The settings trash shows all deleted items regardless of active filter state.
 4. **Single dialog for add and edit** — `#add-task-dialog` is reused; `editingTodoId` distinguishes the mode.
 5. **iOS zoom backstop is scoped, not global** — each form control declares `font-size: 1rem` explicitly; a `@media (pointer: coarse)` rule forces `16px !important` on touch devices only, where mobile browsers auto-zoom on focus of sub-16px inputs. Desktop rendering is governed purely by the explicit declarations.
 6. **`addTodo` prepends regardless of active filters** — a new task should appear immediately even if it doesn't match the current filter.
 7. **`clearAllData` clears the entire todos store** — all profiles, not just the current one; the confirm text says "ALL data" on purpose.
 8. **Subtask ids are UUID strings, todo/profile ids are numbers** — never `Number()` a subtask id.
-9. **`30s` repeat value is legacy** — removed from the dialog's repeat options; `getRepeatMs` still maps it so existing tasks keep working.
-10. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
+9. **`30s` repeat value is legacy** — removed from the UI and from the code (`getRepeatMs` is gone). `nextCrossMoment` returns `null` for it, so completed legacy tasks re-emerge once at their stored `nextRepeatDate` and then stop repeating.
+10. **`nextRepeatDate` is deleted, never nulled** — `null` is a valid IndexedDB key that sorts below all numbers and would keep the record in the `nextRepeatDate` index forever.
+11. **Soft delete has no confirm** — the trash is the safety net; all other destructive actions (permanent delete, profile delete, overwriting imports, purge, clear all) use the custom confirm dialog with the danger variant.
+12. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
+13. **Re-emerged tasks keep their original sort position** — sorted by original `createdAt`, not moved to the top of the list.
+14. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
