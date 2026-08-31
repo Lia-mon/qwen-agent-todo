@@ -46,7 +46,8 @@ body {
   /* ── Colors ───────────────────────────── */
   --color-bg: #f5f5f5;
   --color-surface: #fff;
-  --color-row-alt: #f5f5f580;
+  --color-row-alt: #f5f5f5;
+  --color-extras-bg: #f0f0f0;
   --color-text: #333;
   --color-text-secondary: #666;
   --color-text-muted: #888;
@@ -364,6 +365,24 @@ body {
 .theme-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.row-style-options {
+  display: flex;
+  gap: 16px;
+}
+
+.row-style-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.row-style-options input[type="radio"] {
+  accent-color: var(--color-primary);
+  cursor: pointer;
 }
 
 /* ── Toggle Switch ──────────────────────────────────────────── */
@@ -1259,7 +1278,8 @@ body {
   width: 100%;
   margin-top: 4px;
   padding: 10px 12px;
-  background: var(--color-border-lighter);
+  /* Opaque (no alpha) so the row pattern underneath never shows through. */
+  background: var(--color-extras-bg);
   border-left: 3px solid var(--color-primary);
   border-radius: var(--radius-md);
 }
@@ -1432,11 +1452,21 @@ body {
   padding: 8px 15px;
 }
 
-/* Zebra striping: alternating rows get a subtle full-width pinstripe so items
-   are easier to track without a solid block that shifts the contrast of the
-   text/badges sitting on them. Mostly transparent, so the base surface (and
-   its contrast relationships) stays dominant. */
-.section ul li:nth-child(even) {
+/* Row styling (Personalization): JS adds .row-dots or .row-lines to <html>
+   for the selected option; no class = plain rows. Both patterns are sparse
+   and subtle, so the base surface (and its contrast relationships) stays
+   dominant. Targeted at the two task lists by id so nested lists (e.g.
+   subtasks in the Details panel) can never match. */
+html.row-dots #active-list > li:nth-child(even),
+html.row-dots #completed-list > li:nth-child(even) {
+  background-image:
+    radial-gradient(circle at 10px 10px, var(--color-row-alt) 5px, transparent 4.5px),
+    radial-gradient(circle at 30px 30px, var(--color-row-alt) 3px, transparent 3px);
+  background-size: 40px 40px;
+}
+
+html.row-lines #active-list > li:nth-child(even),
+html.row-lines #completed-list > li:nth-child(even) {
   background: repeating-linear-gradient(
     25deg,
     transparent 0,

@@ -6,7 +6,8 @@
   /* ── Colors ───────────────────────────── */
   --color-bg: #0d0d0d;
   --color-surface: #1a1a1a;
-  --color-row-alt: #22222280;
+  --color-row-alt: #222222;
+  --color-extras-bg: #1f1f1f;
   --color-text: #d4c8b8;
   --color-text-secondary: #9a8e7e;
   --color-text-muted: #8a7e6e;

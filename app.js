@@ -2758,6 +2758,14 @@ async function init() {
     });
   });
 
+  // Row style (even rows): none / lines / dots
+  const savedRowStyle = localStorage.getItem('rowStyle') || 'dots';
+  applyRowStyle(savedRowStyle);
+  document.querySelectorAll('input[name="row-style"]').forEach(radio => {
+    radio.checked = radio.value === savedRowStyle;
+    radio.addEventListener('change', () => applyRowStyle(radio.value));
+  });
+
   // Profile dialog
   const profileDialog = document.getElementById('profile-dialog');
   document.getElementById('profile-add-btn')?.addEventListener('click', () => openProfileDialog(null));
@@ -2801,6 +2809,16 @@ function applyTheme(theme) {
   const colorMap = { styles: '#3498db', girly: '#ff69b4', suave: '#0f3460', gothic: '#8b0000', farm: '#6b8e23' };
   document.querySelector('meta[name="theme-color"]').content = colorMap[theme] || '#3498db';
   document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
+}
+
+/**
+ * Applies the even-row style via a class on <html>; no class = plain rows.
+ * @param {string} style - 'none', 'lines', or 'dots'
+ */
+function applyRowStyle(style) {
+  localStorage.setItem('rowStyle', style);
+  document.documentElement.classList.toggle('row-dots', style === 'dots');
+  document.documentElement.classList.toggle('row-lines', style === 'lines');
 }
 
 init().catch(err => {
