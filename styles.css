@@ -442,6 +442,13 @@ body {
   outline-offset: 2px;
 }
 
+.settings-btn svg,
+.filter-toggle svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
 /* ── Responsive: full width on small screens ────────────────── */
 
 @media (max-width: 1043px) {
