@@ -98,9 +98,7 @@ body {
   --badge-subtasks-bg: #eafaf1;
   --badge-subtasks-fg: #27ae60;
   --badge-attachments-bg: #eaf6ff;
-  --badge-attachments-fg: #3498db;
-  --badge-images-bg: #f3ecfb;
-  --badge-images-fg: #8e44ad;
+  --badge-attachments-fg: #2980b9;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 4px;
@@ -1194,7 +1192,7 @@ body {
 .badge.note { background: var(--badge-note-bg); color: var(--badge-note-fg); }
 .badge.subtasks { background: var(--badge-subtasks-bg); color: var(--badge-subtasks-fg); }
 .badge.attachments { background: var(--badge-attachments-bg); color: var(--badge-attachments-fg); }
-.badge.images { background: var(--badge-images-bg); color: var(--badge-images-fg); }
+.badge svg { width: 12px; height: 12px; vertical-align: -0.15em; }
 
 /* ── Item actions (badges + Details expand + Edit) ──────────── */
 
