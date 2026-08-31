@@ -251,4 +251,10 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 11. **Soft delete has no confirm** — the trash is the safety net; all other destructive actions (permanent delete, profile delete, overwriting imports, purge, clear all) use the custom confirm dialog with the danger variant.
 12. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
 13. **Re-emerged tasks keep their original sort position** — sorted by original `createdAt`, not moved to the top of the list.
-14. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
+10. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
+
+---
+
+## Credits
+
+- **Feather Icons** (https://feathericons.com) — MIT License, © Cole Bemis. Used for the note and attachments badge icons (inline in `app.js`).
