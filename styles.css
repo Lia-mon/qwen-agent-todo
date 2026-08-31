@@ -76,29 +76,29 @@ body {
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: #fdecea;
-  --badge-importance-high-fg: #e74c3c;
+  --badge-importance-high-fg: #c0392b;
   --badge-importance-medium-bg: #fef5e7;
-  --badge-importance-medium-fg: #f39c12;
+  --badge-importance-medium-fg: #b45309;
   --badge-importance-low-bg: #eaf6ff;
-  --badge-importance-low-fg: #3498db;
+  --badge-importance-low-fg: #2471a3;
 
   --badge-urgency-stressy-bg: #fdecea;
   --badge-urgency-stressy-fg: #c0392b;
   --badge-urgency-balanced-bg: #fef5e7;
-  --badge-urgency-balanced-fg: #d68910;
+  --badge-urgency-balanced-fg: #a0600a;
   --badge-urgency-lax-bg: #eaf6ff;
-  --badge-urgency-lax-fg: #2e86c1;
+  --badge-urgency-lax-fg: #2471a3;
 
   --badge-repeatable-bg: #eafaf1;
-  --badge-repeatable-fg: #27ae60;
+  --badge-repeatable-fg: #15803d;
   --badge-deadline-bg: #f0f0f0;
   --badge-deadline-fg: #666;
   --badge-note-bg: #f0f0f0;
   --badge-note-fg: #666;
   --badge-subtasks-bg: #eafaf1;
-  --badge-subtasks-fg: #27ae60;
+  --badge-subtasks-fg: #15803d;
   --badge-attachments-bg: #eaf6ff;
-  --badge-attachments-fg: #2980b9;
+  --badge-attachments-fg: #2471a3;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 4px;

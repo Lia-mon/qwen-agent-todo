@@ -38,21 +38,27 @@
   --badge-importance-high-bg: linear-gradient(145deg, #ffe4e9, #ffd6e0);
   --badge-importance-high-fg: #8a1040;
   --badge-importance-medium-bg: linear-gradient(145deg, #fff5e6, #ffe4c4);
-  --badge-importance-medium-fg: #f39c12;
+  --badge-importance-medium-fg: #9a4d08;
   --badge-importance-low-bg: linear-gradient(145deg, #e8f4fd, #d6e9f8);
-  --badge-importance-low-fg: #3a7ab5;
+  --badge-importance-low-fg: #1e6a9a;
 
   --badge-urgency-stressy-bg: linear-gradient(145deg, #ffe4e9, #ffd6e0);
-  --badge-urgency-stressy-fg: #e74c3c;
+  --badge-urgency-stressy-fg: #a93226;
   --badge-urgency-balanced-bg: linear-gradient(145deg, #fff5e6, #ffe4c4);
-  --badge-urgency-balanced-fg: #d68910;
+  --badge-urgency-balanced-fg: #9a4d08;
   --badge-urgency-lax-bg: linear-gradient(145deg, #e8f4fd, #d6e9f8);
   --badge-urgency-lax-fg: #1e6a9a;
 
-  --badge-repeatable-bg: linear-gradient(145deg, #eaf6ff, #d6e9f8);
-  --badge-repeatable-fg: #27ae60;
+  --badge-repeatable-bg: linear-gradient(145deg, #eafaf1, #d4efdc);
+  --badge-repeatable-fg: #146c2f;
   --badge-deadline-bg: linear-gradient(145deg, #f0f0f0, #e0e0e0);
   --badge-deadline-fg: #7a5060;
+  --badge-note-bg: linear-gradient(145deg, #f0f0f0, #e0e0e0);
+  --badge-note-fg: #5a3d5c;
+  --badge-subtasks-bg: linear-gradient(145deg, #eafaf1, #d4efdc);
+  --badge-subtasks-fg: #146c2f;
+  --badge-attachments-bg: linear-gradient(145deg, #e8f4fd, #d6e9f8);
+  --badge-attachments-fg: #1e6a9a;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 10px;

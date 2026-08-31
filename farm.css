@@ -35,21 +35,27 @@
   --badge-importance-high-bg: #fdecea;
   --badge-importance-high-fg: #c0392b;
   --badge-importance-medium-bg: #fef5e7;
-  --badge-importance-medium-fg: #d4a017;
+  --badge-importance-medium-fg: #b45309;
   --badge-importance-low-bg: #eaf6ff;
-  --badge-importance-low-fg: #5b9bd5;
+  --badge-importance-low-fg: #2471a3;
 
   --badge-urgency-stressy-bg: #fdecea;
   --badge-urgency-stressy-fg: #c0392b;
   --badge-urgency-balanced-bg: #fef5e7;
-  --badge-urgency-balanced-fg: #d4a017;
+  --badge-urgency-balanced-fg: #b45309;
   --badge-urgency-lax-bg: #eafaf1;
-  --badge-urgency-lax-fg: #27ae60;
+  --badge-urgency-lax-fg: #15803d;
 
   --badge-repeatable-bg: #eafaf1;
-  --badge-repeatable-fg: #27ae60;
+  --badge-repeatable-fg: #15803d;
   --badge-deadline-bg: #f0e8d8;
   --badge-deadline-fg: #6e6250;
+  --badge-note-bg: #f0e8d8;
+  --badge-note-fg: #6e6250;
+  --badge-subtasks-bg: #eafaf1;
+  --badge-subtasks-fg: #15803d;
+  --badge-attachments-bg: #eaf6ff;
+  --badge-attachments-fg: #2471a3;
 
   /* ── Sizing ───────────────────────────── */
   --radius-sm: 6px;

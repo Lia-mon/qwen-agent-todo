@@ -32,27 +32,27 @@
 
   /* ── Badge Colors ─────────────────────── */
   --badge-importance-high-bg: rgba(233, 69, 96, 0.2);
-  --badge-importance-high-fg: #e94560;
+  --badge-importance-high-fg: #ff7a93;
   --badge-importance-medium-bg: rgba(243, 156, 18, 0.2);
   --badge-importance-medium-fg: #f39c12;
   --badge-importance-low-bg: rgba(15, 52, 96, 0.3);
   --badge-importance-low-fg: #5dade2;
 
   --badge-urgency-stressy-bg: rgba(233, 69, 96, 0.2);
-  --badge-urgency-stressy-fg: #e94560;
+  --badge-urgency-stressy-fg: #ff7a93;
   --badge-urgency-balanced-bg: rgba(243, 156, 18, 0.2);
   --badge-urgency-balanced-fg: #f39c12;
   --badge-urgency-lax-bg: rgba(39, 174, 96, 0.2);
-  --badge-urgency-lax-fg: #27ae60;
+  --badge-urgency-lax-fg: #4ade80;
 
   --badge-repeatable-bg: rgba(39, 174, 96, 0.2);
-  --badge-repeatable-fg: #27ae60;
+  --badge-repeatable-fg: #4ade80;
   --badge-deadline-bg: rgba(255, 255, 255, 0.05);
-  --badge-deadline-fg: #888888;
+  --badge-deadline-fg: #a0a0a0;
   --badge-note-bg: rgba(255, 255, 255, 0.05);
   --badge-note-fg: #a0a0a0;
   --badge-subtasks-bg: rgba(39, 174, 96, 0.2);
-  --badge-subtasks-fg: #27ae60;
+  --badge-subtasks-fg: #4ade80;
   --badge-attachments-bg: rgba(93, 173, 226, 0.15);
   --badge-attachments-fg: #5dade2;
 
