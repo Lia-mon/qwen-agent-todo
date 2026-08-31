@@ -1065,7 +1065,7 @@ body {
 .filter-btn {
   background: none;
   border: 1px solid var(--color-border);
-  padding: 3px 10px;
+  padding: 2px 7px;
   border-radius: var(--radius-sm);
   font-size: 0.8rem;
   cursor: pointer;
@@ -1171,8 +1171,8 @@ body {
 }
 
 .badge {
-  font-size: 0.7rem;
-  padding: 2px 8px;
+  font-size: 0.75rem;
+  padding: 2px 7px;
   border-radius: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1192,7 +1192,7 @@ body {
 .badge.note { background: var(--badge-note-bg); color: var(--badge-note-fg); }
 .badge.subtasks { background: var(--badge-subtasks-bg); color: var(--badge-subtasks-fg); }
 .badge.attachments { background: var(--badge-attachments-bg); color: var(--badge-attachments-fg); }
-.badge svg { width: 12px; height: 12px; vertical-align: -0.15em; }
+.badge svg { width: 14px; height: 14px; vertical-align: -0.15em; }
 
 /* ── Item actions (badges + Details expand + Edit) ──────────── */
 
@@ -1200,8 +1200,7 @@ body {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex: 1 0 200px;
-  padding-left:40px;
+  flex: 1 0 280px;
   justify-content: end;
   flex-wrap:wrap;
 }
