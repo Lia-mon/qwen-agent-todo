@@ -46,6 +46,7 @@ body {
   /* ── Colors ───────────────────────────── */
   --color-bg: #f5f5f5;
   --color-surface: #fff;
+  --color-row-alt: #f5f5f580;
   --color-text: #333;
   --color-text-secondary: #666;
   --color-text-muted: #888;
@@ -1095,6 +1096,11 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Bleed to the panel edges so row backgrounds span the full panel width;
+     the negative margins compensate for the panel's 15px padding. */
+  margin-left: -15px;
+  margin-right: -15px;
+  width: calc(100% + 30px);
 }
 
 .todo-item {
@@ -1124,6 +1130,8 @@ body {
 .todo-item .checkbox {
   width: 22px;
   height: 22px;
+  /* Solid base so the row pinstripe never shows through the open checkbox. */
+  background: var(--color-surface);
   border: 2px solid var(--color-checkbox-border);
   border-radius: 50%;
   cursor: pointer;
@@ -1421,7 +1429,21 @@ body {
 }
 
 .section ul li {
-  padding: 8px 0;
+  padding: 8px 15px;
+}
+
+/* Zebra striping: alternating rows get a subtle full-width pinstripe so items
+   are easier to track without a solid block that shifts the contrast of the
+   text/badges sitting on them. Mostly transparent, so the base surface (and
+   its contrast relationships) stays dominant. */
+.section ul li:nth-child(even) {
+  background: repeating-linear-gradient(
+    25deg,
+    transparent 0,
+    transparent 20px,
+    var(--color-row-alt) 20px,
+    var(--color-row-alt) 24px
+  );
 }
 
 /* Section visibility controlled by view class on #todo-list */

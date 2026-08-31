@@ -10,6 +10,7 @@
   --color-bg: linear-gradient(135deg, #ffeef8 0%, #ffe4f0 25%, #fff0f5 50%, #f8e8ff 75%, #ffe4f0 100%);
   --color-bg-fixed: fixed;
   --color-surface: linear-gradient(145deg, #ffffff 0%, #fff5f9 100%);
+  --color-row-alt: #fdeef580;
   --color-text: #5a3d5c;
   --color-text-secondary: #8a5070;
   --color-text-muted: #9a6a80;
