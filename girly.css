@@ -73,7 +73,7 @@
   --shadow-btn: 0 4px 16px rgba(214, 51, 132, 0.3), 0 2px 8px rgba(255, 182, 193, 0.2);
 
   /* ── Transitions ──────────────────────── */
-  --transition-base: 0.3s ease;
+  --transition-base: 0.3s;
 
   /* ── Spacing ──────────────────────────── */
   --gap-xs: 6px;
@@ -473,11 +473,8 @@ body::before {
 /* ── Task List ──────────────────────────────────────────────── */
 
 .todo-item {
-  gap: 12px;
-  padding: 12px 0;
   border-bottom-style: dashed;
   border-color: rgba(255, 182, 193, 0.3);
-  animation: fadeIn 0.3s ease;
 }
 
 .todo-item .checkbox {
