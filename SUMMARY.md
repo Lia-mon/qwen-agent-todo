@@ -2,7 +2,7 @@
 
 ## Overview
 
-A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repeatable schedules, importance levels, urgency tracking, and deadline management. Data is persisted in IndexedDB with a soft-delete trash system.
+A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repeatable schedules, importance levels, urgency tracking, deadline management, and multiple profiles. Data is persisted in IndexedDB with a soft-delete trash system. Deployed to GitHub Pages via a static workflow.
 
 ---
 
@@ -11,7 +11,8 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 The repeatable task rework (fixed-schedule re-emergence) is implemented and merged. Open decisions:
 
 - **Periodic run while open** — re-emergence currently fires on page load and profile switch only. A dedicated `setInterval(runScheduledReemergence, 5min)` would let 5am crosses fire while the app is open (separate from the disabled `checkTasks` interval).
-- **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework in `report.md`).
+- **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework).
+- **Live countdowns** — `updateTimers()` has no live caller (the 5-minute interval is commented out in `init()`), so deadline countdown badges freeze at their rendered value until reload. Re-enabling the interval (or a lighter one) restores live countdowns and urgency notifications.
 
 ---
 
@@ -19,15 +20,19 @@ The repeatable task rework (fixed-schedule re-emergence) is implemented and merg
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, add/edit dialog, and confirm dialog. Loads all CSS themes and the JS bundle. |
-| `app.js` | All application logic (~2800 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, profile management, data import/export. |
+| `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, profile dialog, add/edit dialog, and confirm dialog. Loads all CSS themes and the JS bundle. |
+| `app.js` | All application logic. DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, profile management, data import/export. |
 | `styles.css` | Base styles and CSS custom properties (colors, radii, transitions, spacing). Defines the "Classic" theme. Includes base layout, components, badges, trash actions, pagination, and responsive breakpoints. |
 | `girly.css` | Pink/pastel theme override — rounded corners, soft shadows, pink accent colors. |
 | `suave.css` | Dark navy theme — sharp corners, no shadows, cool blue/red palette, Inter font. |
 | `gothic.css` | Black/red gothic theme — zero border-radius, serif fonts (Cinzel), no shadows, dramatic red accents, decorative emoji icons. |
 | `farm.css` | Warm pastoral theme — green accent, rounded corners, soft shadows, Nunito font, radial gradient background, decorative emoji icons. |
 | `manifest.json` | PWA manifest — name, icons (192×192, 512×512), standalone display mode, theme/background colors. |
-| `sw.js` | Development service worker — pre-caches critical assets on activate, network-first fetch with stale-while-revalidate re-caching, notification click handler to focus/open app window. |
+| `sw.js` | Development service worker — pre-caches critical assets on activate, network-first fetch with cache fallback (cache only consulted when the network fails; navigations fall back to `./index.html`), notification click handler to focus/open app window. |
+| `README.md` | Project README — origin story (local LLM agent experiment) and feature list. |
+| `LICENSE` | MIT License. |
+| `.github/workflows/static.yml` | GitHub Pages deploy workflow — pushes to `main` deploy the repo root via `actions/deploy-pages`. |
+| `tools/contrast.js` | Node CLI WCAG contrast checker for the theme CSS (`node tools/contrast.js`); merges `:root` tokens per theme and reports contrast ratios for color+background rule pairs. |
 | `icon-192x192.png` | PWA icon (192×192). |
 | `icon-512x512.png` | PWA icon (512×512). |
 | `icon.xcf` | GIMP source file for the PWA icons. |
@@ -114,11 +119,13 @@ purgeAllTrash() → manual (Data Management): permanently deletes trash >30 days
 
 - **Add tasks** via dialog with text, repeat schedule, importance, duration, deadline, notes, subtasks, and file attachments
 - **Edit tasks** via the Edit button at the right of the item (same dialog, `editingTodoId` tracks mode)
+- **Delete from edit dialog** — a Delete button (visible only in edit mode) soft-deletes the task through the same trash flow and closes the dialog
 - **Dialog sizing** — on ≤600px viewports the add/edit dialog takes over the full screen (100dvh, no radius); the form scrolls internally (`flex: 1; min-height: 0; overflow-y: auto`) with a visible themed scrollbar — styled `::-webkit-scrollbar` forces a persistent scrollbar on mobile browsers that default to invisible overlays
 - **Notes** — free-form textarea in the dialog; a note badge (file-text icon) shows at the right of the list item
 - **Subtasks** — inline checklist in the dialog (add/check/remove); an `N/M` progress badge shows at the right of the list item; subtasks can also be toggled directly from the Details panel (persists via `dbPut`, updates badge/heading in place)
-- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a gallery preview); blobs stored on the todo, single badge at the right of the list item — paperclip icon when there are non-image attachments, image icon + count for images (inline Feather SVGs, `stroke: currentColor`, so they follow the badge's theme color; images viewable in the Details panel); click a name in the edit dialog to download
+- **Attachments** — styled file picker in the dialog (dashed drop-zone, image files get a scrollable gallery preview — a track with prev/next buttons and an `N/M` counter); blobs stored on the todo, single badge at the right of the list item — paperclip icon when there are non-image attachments, image icon + count for images (inline Feather SVGs, `stroke: currentColor`, so they follow the badge's theme color; images viewable in the Details panel); click a name in the edit dialog to download
 - **Details panel** — a Details button (shown when the item has notes, subtasks, or image attachments) toggles an inline `.task-extras` panel showing the notes text, a tappable subtask checklist (✓/○), and an Images section (grid of attached images) when present; attachments themselves (name + size, click to download) live only in the edit dialog. The chevron rotates to indicate the open state. Toggled via the `expand-extras` delegated action
+- **Deadline badge** — items with a deadline show a formatted countdown (`2d 5h`, `Overdue`) computed at render time; it is only refreshed by `updateTimers()`, which currently has no live caller (see Next Up)
 - **Complete tasks** by clicking the checkbox — fade+shrink exit animation (`.todo-item.removing`, element removed on `transitionend` with a timeout fallback), then moves from active to completed
 - **Delete tasks** (soft delete) — moves to trash, not permanently removed
 - **Restore from trash** — moves back to active or completed depending on prior state
@@ -141,6 +148,7 @@ Repeatable tasks re-emerge on **fixed calendar crosses** (local time), not offse
 - `runScheduledReemergence()` re-emerges due tasks **across all profiles**: it scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`), moves each back to active (`completed = 0`, `completedAt = null`, field deleted), and re-renders. Runs on `init()` and on every `activateProfile()` (profile switch / full-data restore).
 - Editing a completed repeatable recomputes `nextRepeatDate` from `completedAt` (or deletes it if the repeat was removed).
 - Re-emerged tasks keep their original `createdAt` sort position (they don't jump to the top of the list).
+- Re-emerging resets subtask progress (all subtasks back to unchecked) — a new cycle starts fresh. Decompleting a completed task does **not** reset subtasks (same cycle is resumed).
 - Legacy `'30s'` repeat values have no fixed schedule: `nextCrossMoment` returns `null`, so completed legacy tasks re-emerge once at their stored `nextRepeatDate` (if any) and then stop repeating.
 
 ### Urgency System
@@ -151,11 +159,11 @@ Repeatable tasks re-emerge on **fixed calendar crosses** (local time), not offse
 - **Balanced**: Reasonable buffer between duration and deadline
 - **Lax**: Plenty of time relative to duration
 
-`checkTasks()` (urgency tracking only) detects changes and triggers grouped notifications. Dormant while the periodic interval is disabled — it runs once on init; `lastUrgencyMap` seeds the baseline at init and on profile switch.
+`checkTasks()` (urgency tracking only) detects changes and triggers grouped notifications. Dormant while the periodic interval is disabled — it runs once on init (a no-op, since `lastUrgencyMap` was just seeded); the map is re-seeded on profile switch.
 
 ### Filtering
 
-Three independent filter dimensions with toggle buttons:
+Status buttons above the filters switch the main list between the Active and Completed views (`statusFilter`). Three independent filter dimensions with toggle buttons:
 
 | Dimension | Options |
 |-----------|---------|
@@ -179,7 +187,7 @@ Five tabs in a `<dialog>` modal:
 |-----|----------|
 | Notifications | Enable/disable browser notifications |
 | Data Management | Export JSON (all profiles + all todos), Import JSON (dispatched by file format), Import Profile (adds a new profile from a profile file), Purge Trash (permanently deletes trash older than 30 days, all profiles), Clear All Data — all profiles (attachment blobs are serialized to base64 data URLs for export and restored to Blobs on import) |
-| Personalization | Theme selector (Classic/Girly/Suave/Gothic/Farm), Reduce Motion toggle |
+| Personalization | Theme selector (Classic/Girly/Suave/Gothic/Farm), Row Style (None/Lines/Dots — even-row styling via `row-dots`/`row-lines` classes on `<html>`, persisted in `localStorage('rowStyle')`, default Dots), Reduce Motion toggle (session-only, not persisted) |
 | Trash | Paginated list of deleted tasks with Restore / Delete Forever buttons |
 | Profiles | Add/Edit/Delete profiles; Load button switches the active profile (marked with an "Active" badge); per-row Export button downloads that profile's todos |
 
@@ -201,9 +209,12 @@ Notification click focuses or opens the app window (handled by SW).
 
 Currently dormant — the only caller (`checkTasks`) runs once at init and the periodic interval is disabled (see Known Decisions).
 
+- The **notification toggle** only requests permission when checked; it is not persisted and not initialized from `Notification.permission` (the checkbox always starts off; unchecking does nothing).
+- **`sendForegroundNotification()`** (a "N active tasks" summary notification) is dead code — its 300s interval caller is commented out in `init()`.
+
 ### Service Worker
 
-Development strategy: **network-first** with stale-while-revalidate caching. Always fetches fresh assets, caches successful GET responses for future requests. Caches named `todo-app-dev`.
+Development strategy: **network-first** with cache fallback. Always fetches fresh assets and re-caches successful GET responses; the cache is only consulted when the network fails (with a final fallback to `./index.html` for navigations). Caches named `todo-app-dev`.
 
 ---
 
@@ -215,7 +226,6 @@ Development strategy: **network-first** with stale-while-revalidate caching. Alw
 
 ### Incremental DOM Updates
 
-- `moveTo()` — removes element from source list, appends to target list (no full re-render)
 - `updateTodoInDOM()` — finds element by `data-id`, replaces with updated version
 - `removeTodoFromDOM()` — removes element by `data-id`
 - `permanentDeleteTrash()` — swaps in next-page item from the trash list
@@ -223,6 +233,7 @@ Development strategy: **network-first** with stale-while-revalidate caching. Alw
 ### Shared Helpers
 
 - `binaryInsert(arr, item, compare)` — sorted insertion; used when completing and decompleting tasks so items land in their sorted position
+- `newId()` — `crypto.randomUUID()` with a timestamp+random fallback for non-secure contexts; used for subtask and attachment ids
 - `downloadBlob(blob, filename)` — object-URL download with a deferred (1s) revoke; single implementation for all three download sites (item, details panel, dialog)
 - `serializeAttachments()` / `deserializeAttachments()` — base64 data URLs for export/import round-trips
 - `activateProfile(id)` — shared profile-activation body (load, sort, reset pagination, re-seed `lastUrgencyMap`, render)
@@ -251,7 +262,9 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 11. **Soft delete has no confirm** — the trash is the safety net; all other destructive actions (permanent delete, profile delete, overwriting imports, purge, clear all) use the custom confirm dialog with the danger variant.
 12. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
 13. **Re-emerged tasks keep their original sort position** — sorted by original `createdAt`, not moved to the top of the list.
-10. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
+14. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
+15. **Notification and Reduce Motion toggles are not persisted** — both reset on reload; the notification checkbox is not initialized from `Notification.permission`.
+16. **`updateTimers()` has no live caller** — deadline countdown badges freeze at their rendered value until reload; re-enabling the 5-minute interval restores them (see Next Up).
 
 ---
 
