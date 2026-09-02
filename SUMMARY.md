@@ -10,7 +10,6 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 The repeatable task rework (fixed-schedule re-emergence + stacking) is implemented and merged. Open items:
 
-- **Missed-cross counting** — a due scan increments `repeatStack` by 1 and jumps `nextRepeatDate` to the next cross after now, so crosses missed while the app was closed are undercounted (30 days closed → ×1 on a daily task). Deferred.
 - **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework in `untracked/report.md`).
 - **README refresh** — README still claims SW background sync, repeat notifications, and the old repeat list; rewrite pending.
 
@@ -140,8 +139,8 @@ Repeatable tasks track their next fixed calendar cross at **all times** (local t
 | `yearly` (Yearly) | Jan 1 5am |
 
 - `nextRepeatDate` is maintained via `syncNextRepeatDate(todo, afterMs)` at every state change: add, edit, complete, decomplete, and restore-from-trash. Completing anchors it to `completedAt`; active tasks anchor to now (an existing still-future date is kept on edit unless the repeat changed).
-- **Stacking** — when a cycle cross arrives while the task is still active, it does not re-emerge; instead `repeatStack` increments and `nextRepeatDate` advances to the next cross. Missed cycles accumulate (shown as a `×N` stacked badge next to the repeat badge) until the task is completed, which consumes (resets) the stack.
-- **Re-emergence** — when a cycle cross arrives while the task is completed, `runScheduledReemergence()` moves it back to active (`completed = 0`, `completedAt = null`, `repeatStack` reset to 0) and re-anchors `nextRepeatDate` to the next cross from now — re-emerged tasks carry a next cycle just like any other active repeatable. It scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`) **across all profiles**, re-renders, and logs counts. Runs on `init()` and on every `activateProfile()` (profile switch / full-data restore).
+- **Stacking** — when a due scan finds an active task past its `nextRepeatDate`, it does not re-emerge; instead every cross missed since the stored date (the stored date itself is due and counts) is added to `repeatStack`, and `nextRepeatDate` advances to the first cross after now. Missed cycles accumulate (shown as a `×N` stacked badge next to the repeat badge) until the task is completed, which resets the stack. Due active tasks are grouped by repeat value: all tasks of a type land on the same final date, so it is computed once per type; each task counts its own missed crosses with a simple loop.
+- **Re-emergence** — when a cycle cross arrives while the task is completed, `runScheduledReemergence()` moves it back to active (`completed = 0`, `completedAt = null`, `repeatStack` reset to 0) and re-anchors `nextRepeatDate` to the next cross from now — re-emerged tasks carry a next cycle just like any other active repeatable. Re-emergence is one-shot: crosses missed while completed are not counted. It scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`) **across all profiles**, re-renders, and logs counts. Runs on `init()` and on every `activateProfile()` (profile switch / full-data restore).
 - Editing a completed repeatable recomputes `nextRepeatDate` from `completedAt` (or deletes it if the repeat was removed).
 - Re-emerged tasks keep their original `createdAt` sort position (they don't jump to the top of the list).
 - Legacy `'30s'` repeat values have no fixed schedule: `nextCrossMoment` returns `null`, so `syncNextRepeatDate` deletes the field and legacy tasks stop repeating once their stored `nextRepeatDate` (if any) is processed.
@@ -254,8 +253,9 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 11. **Stacking resets on completion** — completing (or decompleting) a repeatable resets `repeatStack` to 0; the stack only accumulates while the task sits active across cycle crosses. Restoring an active repeatable from trash re-anchors `nextRepeatDate` to now but keeps any existing stack.
 12. **Soft delete has no confirm** — the trash is the safety net; all other destructive actions (permanent delete, profile delete, overwriting imports, purge, clear all) use the custom confirm dialog with the danger variant.
 13. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
-14. **No periodic background run** — PWA background sync doesn't fire in a controlled manner, so re-emergence/stacking fires on page load and profile switch only; crosses missed in between are processed (as a single scan) on next open.
-15. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
+14. **No periodic background run** — PWA background sync doesn't fire in a controlled manner, so re-emergence/stacking fires on page load and profile switch only; crosses missed in between are counted (as a single scan) on next open.
+15. **Missed crosses only stack while active** — re-emergence is one-shot (a completed task comes back once and re-anchors from now; crosses missed while completed are not counted), and time spent in trash doesn't stack (restoring re-anchors from now, keeping any existing stack).
+16. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
 
 ---
 

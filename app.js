@@ -923,9 +923,11 @@ function syncNextRepeatDate(todo, afterMs = Date.now()) {
  * all profiles. Completed tasks re-emerge: they move back to active and
  * their `nextRepeatDate` re-anchors to the next fixed moment (active tasks
  * always carry one); their `repeatStack` resets to 0. Active tasks stack:
- * their `repeatStack` counter increments and `nextRepeatDate` advances to
- * the next fixed moment, so missed cycles accumulate until the task is
- * completed (which clears the stack).
+ * every cross missed since their stored date is added to `repeatStack` and
+ * `nextRepeatDate` advances to the next fixed moment, so missed cycles
+ * accumulate until the task is completed (which resets the stack). Due
+ * active tasks are grouped by repeat value: all tasks of a type land on
+ * the same final date, so it is computed once per type.
  * @returns {Promise<void>}
  */
 async function runScheduledReemergence() {
@@ -933,13 +935,17 @@ async function runScheduledReemergence() {
   const due = await dbGetDueTodos(now);
   let reemerged = 0;
   let stacked = 0;
+
+  // First pass: re-emerge completed tasks, group due active tasks by repeat.
+  const activeByRepeat = new Map();
   for (const todo of due) {
     // The index only matches records that have a nextRepeatDate, but
     // trashed repeatables keep theirs — skip those.
     if (todo.deleted !== 0 || !todo.repeat) continue;
 
     if (todo.completed === 1) {
-      // Re-emerge: completed → active (re-anchor the next cycle from now)
+      // Re-emerge: completed → active (re-anchor the next cycle from now;
+      // re-emergence is one-shot — missed crosses while completed don't stack)
       todo.completed = 0;
       todo.completedAt = null;
       syncNextRepeatDate(todo);
@@ -948,23 +954,40 @@ async function runScheduledReemergence() {
       reemerged++;
       // Keep the current profile's in-memory arrays in sync.
       const local = completed.find(t => t.id === todo.id);
-      if (!local) continue;
-      local.completed = 0;
-      local.completedAt = null;
-      if ('nextRepeatDate' in todo) local.nextRepeatDate = todo.nextRepeatDate;
-      else delete local.nextRepeatDate;
-      local.repeatStack = 0;
-      completed.splice(completed.indexOf(local), 1);
-      binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
+      if (local) {
+        local.completed = 0;
+        local.completedAt = null;
+        if ('nextRepeatDate' in todo) local.nextRepeatDate = todo.nextRepeatDate;
+        else delete local.nextRepeatDate;
+        local.repeatStack = 0;
+        completed.splice(completed.indexOf(local), 1);
+        binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
+      }
     } else {
-      // Stack: active task missed a cycle — count it and advance the schedule
-      const next = nextCrossMoment(todo.repeat, now);
-      if (next != null) {
-        todo.nextRepeatDate = next;
-        todo.repeatStack = (todo.repeatStack || 0) + 1;
-      } else {
+      if (!activeByRepeat.has(todo.repeat)) activeByRepeat.set(todo.repeat, []);
+      activeByRepeat.get(todo.repeat).push(todo);
+    }
+  }
+
+  // Second pass: stack due active tasks. All tasks of a repeat type land
+  // on the same final date, so compute it once per type.
+  for (const [repeat, group] of activeByRepeat) {
+    const final = nextCrossMoment(repeat, now);
+    for (const todo of group) {
+      if (final == null) {
         // Legacy repeat with no fixed schedule: stop tracking it.
         delete todo.nextRepeatDate;
+      } else {
+        // Count every cross in [stored, now] — the stored date is itself
+        // due (it's in the scan), so it counts as a missed cross too.
+        let t = todo.nextRepeatDate;
+        let missed = 0;
+        while (t != null && t <= now) {
+          missed++;
+          t = nextCrossMoment(repeat, t);
+        }
+        todo.repeatStack = (todo.repeatStack || 0) + missed;
+        todo.nextRepeatDate = final;
       }
       await dbPut(todo);
       stacked++;
@@ -977,6 +1000,7 @@ async function runScheduledReemergence() {
       }
     }
   }
+
   if (reemerged === 0 && stacked === 0) return;
   render();
   console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged, ${stacked} task(s) stacked`);
