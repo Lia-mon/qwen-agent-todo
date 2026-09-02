@@ -14,7 +14,8 @@
  * @property {'high' | 'medium' | 'low'} importance - Task priority level
  * @property {number | null} deadline - Unix timestamp of deadline (null if none)
  * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
- * @property {number} [nextRepeatDate] - Next re-emergence timestamp (only for completed repeatable tasks)
+ * @property {number} [nextRepeatDate] - Next cycle timestamp for repeatable tasks (active or completed); deleted, never nulled
+ * @property {number} repeatStack - Count of crossed cycles stacked while the task was still active (0 when none)
  * @property {number} profileId - ID of the profile this todo belongs to
  */
 
@@ -901,39 +902,84 @@ function nextCrossMoment(repeat, afterMs) {
 }
 
 /**
- * Re-emerges completed repeatable tasks whose `nextRepeatDate` has
- * arrived — across all profiles. Each re-emerged task moves back to
- * active; its `nextRepeatDate` is cleared and is re-set (on the fixed
- * schedule, via nextCrossMoment) the next time the task is completed.
- *
- * Not wired into init()/intervals yet.
+ * Sets (or deletes) `nextRepeatDate` for a todo based on its repeat value,
+ * strictly after `afterMs`. Deletes the field when the repeat is absent or
+ * has no fixed schedule (e.g. legacy '30s') — never sets it to null.
+ * @param {Object} todo - The todo to sync.
+ * @param {number} [afterMs] - Lower bound (exclusive), defaults to now.
+ */
+function syncNextRepeatDate(todo, afterMs = Date.now()) {
+  if (!todo.repeat) {
+    delete todo.nextRepeatDate;
+    return;
+  }
+  const next = nextCrossMoment(todo.repeat, afterMs);
+  if (next != null) todo.nextRepeatDate = next;
+  else delete todo.nextRepeatDate;
+}
+
+/**
+ * Processes repeatable tasks whose `nextRepeatDate` has arrived — across
+ * all profiles. Completed tasks re-emerge: they move back to active and
+ * their `nextRepeatDate` re-anchors to the next fixed moment (active tasks
+ * always carry one); their `repeatStack` resets to 0. Active tasks stack:
+ * their `repeatStack` counter increments and `nextRepeatDate` advances to
+ * the next fixed moment, so missed cycles accumulate until the task is
+ * completed (which clears the stack).
  * @returns {Promise<void>}
  */
 async function runScheduledReemergence() {
   const now = Date.now();
   const due = await dbGetDueTodos(now);
   let reemerged = 0;
+  let stacked = 0;
   for (const todo of due) {
     // The index only matches records that have a nextRepeatDate, but
-    // trashed completed repeatables keep theirs — skip those.
-    if (todo.deleted !== 0 || todo.completed !== 1 || !todo.repeat) continue;
-    todo.completed = 0;
-    todo.completedAt = null;
-    delete todo.nextRepeatDate;
-    await dbPut(todo);
-    reemerged++;
-    // Keep the current profile's in-memory arrays in sync.
-    const local = completed.find(t => t.id === todo.id);
-    if (!local) continue;
-    local.completed = 0;
-    local.completedAt = null;
-    delete local.nextRepeatDate;
-    completed.splice(completed.indexOf(local), 1);
-    binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
+    // trashed repeatables keep theirs — skip those.
+    if (todo.deleted !== 0 || !todo.repeat) continue;
+
+    if (todo.completed === 1) {
+      // Re-emerge: completed → active (re-anchor the next cycle from now)
+      todo.completed = 0;
+      todo.completedAt = null;
+      syncNextRepeatDate(todo);
+      todo.repeatStack = 0;
+      await dbPut(todo);
+      reemerged++;
+      // Keep the current profile's in-memory arrays in sync.
+      const local = completed.find(t => t.id === todo.id);
+      if (!local) continue;
+      local.completed = 0;
+      local.completedAt = null;
+      if ('nextRepeatDate' in todo) local.nextRepeatDate = todo.nextRepeatDate;
+      else delete local.nextRepeatDate;
+      local.repeatStack = 0;
+      completed.splice(completed.indexOf(local), 1);
+      binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
+    } else {
+      // Stack: active task missed a cycle — count it and advance the schedule
+      const next = nextCrossMoment(todo.repeat, now);
+      if (next != null) {
+        todo.nextRepeatDate = next;
+        todo.repeatStack = (todo.repeatStack || 0) + 1;
+      } else {
+        // Legacy repeat with no fixed schedule: stop tracking it.
+        delete todo.nextRepeatDate;
+      }
+      await dbPut(todo);
+      stacked++;
+      // Keep the current profile's in-memory copy in sync.
+      const local = active.find(t => t.id === todo.id);
+      if (local) {
+        if ('nextRepeatDate' in todo) local.nextRepeatDate = todo.nextRepeatDate;
+        else delete local.nextRepeatDate;
+        local.repeatStack = todo.repeatStack || 0;
+      }
+    }
   }
-  if (reemerged === 0) return;
+  if (reemerged === 0 && stacked === 0) return;
   render();
-  console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged`);
+  console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged, ${stacked} task(s) stacked`);
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -1061,6 +1107,14 @@ function buildItem(todo, view) {
       repBadge.className = 'badge repeatable';
       repBadge.textContent = todo.repeat;
       meta.appendChild(repBadge);
+    }
+
+    if (todo.repeatStack > 0) {
+      const stackBadge = document.createElement('span');
+      stackBadge.className = 'badge stacked';
+      stackBadge.textContent = `×${todo.repeatStack}`;
+      stackBadge.title = `${todo.repeatStack} missed cycle${todo.repeatStack > 1 ? 's' : ''} stacked — complete to clear`;
+      meta.appendChild(stackBadge);
     }
 
     if (todo.deadline) {
@@ -1847,6 +1901,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration, notes, s
     deletedAt: null,
     profileId: currentProfileId
   };
+  syncNextRepeatDate(todo);
   const id = await dbAdd(todo);
   todo.id = id;
   active.unshift(todo);
@@ -1874,12 +1929,15 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
   if (!todo) return;
 
   todo.text = text;
+  const prevRepeat = todo.repeat;
   todo.repeat = repeat || null;
-  // Keep the pending re-emergence in sync with the (possibly changed) repeat.
+  // Keep the next cycle in sync with the (possibly changed) repeat.
+  // Completed tasks anchor to completedAt; active tasks keep a still-future
+  // date unless the repeat changed or the date already passed.
   if (todo.completed === 1) {
-    const next = nextCrossMoment(todo.repeat, todo.completedAt || Date.now());
-    if (next != null) todo.nextRepeatDate = next;
-    else delete todo.nextRepeatDate;
+    syncNextRepeatDate(todo, todo.completedAt || Date.now());
+  } else if (prevRepeat !== todo.repeat || !todo.nextRepeatDate || todo.nextRepeatDate <= Date.now()) {
+    syncNextRepeatDate(todo);
   }
   todo.importance = importance;
   todo.duration = duration;
@@ -1944,20 +2002,21 @@ async function toggleTodo(id) {
   if (!todo) return;
 
   if (todo.completed === 0) {
-    // Complete: active → completed
+    // Complete: active → completed (any stacked cycles are consumed)
     todo.completed = 1;
     todo.completedAt = Date.now();
-    const next = nextCrossMoment(todo.repeat, Date.now());
-    if (next != null) todo.nextRepeatDate = next;
+    syncNextRepeatDate(todo);
+    todo.repeatStack = 0;
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
     binaryInsert(completed, todo, (a, b) => b.completedAt - a.completedAt);
     removeTodoFromDOM(todo.id);
   } else {
-    // Decomplete: completed → active
+    // Decomplete: completed → active (fresh schedule from now)
     todo.completed = 0;
     todo.completedAt = null;
-    delete todo.nextRepeatDate;
+    syncNextRepeatDate(todo);
+    todo.repeatStack = 0;
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
     binaryInsert(active, todo, (a, b) => b.createdAt - a.createdAt);
@@ -2013,6 +2072,8 @@ async function restoreTrash(id) {
   const wasCompleted = todo.completed === 1;
   todo.deleted = 0;
   todo.deletedAt = null;
+  // Restored active repeatables get a fresh next cycle from now.
+  if (!wasCompleted) syncNextRepeatDate(todo);
 
   deleted.splice(idx, 1);
   if (wasCompleted) {

@@ -53,6 +53,8 @@
 
   --badge-repeatable-bg: linear-gradient(145deg, #eafaf1, #d4efdc);
   --badge-repeatable-fg: #146c2f;
+  --badge-stacked-bg: linear-gradient(145deg, #fff5e6, #ffe4c4);
+  --badge-stacked-fg: #9a4d08;
   --badge-deadline-bg: linear-gradient(145deg, #f0f0f0, #e0e0e0);
   --badge-deadline-fg: #7a5060;
   --badge-note-bg: linear-gradient(145deg, #f0f0f0, #e0e0e0);

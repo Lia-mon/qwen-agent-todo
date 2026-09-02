@@ -49,6 +49,8 @@
 
   --badge-repeatable-bg: rgba(45, 90, 45, 0.25);
   --badge-repeatable-fg: #5a9a5a;
+  --badge-stacked-bg: rgba(139, 105, 20, 0.25);
+  --badge-stacked-fg: #b8860b;
   --badge-deadline-bg: rgba(255, 255, 255, 0.03);
   --badge-deadline-fg: #8a7e6e;
   --badge-note-bg: rgba(255, 255, 255, 0.05);
