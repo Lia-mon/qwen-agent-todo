@@ -8,10 +8,11 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 ## Next Up
 
-The repeatable task rework (fixed-schedule re-emergence) is implemented and merged. Open decisions:
+The repeatable task rework (fixed-schedule re-emergence + stacking) is implemented and merged. Open items:
 
-- **Periodic run while open** — re-emergence currently fires on page load and profile switch only. A dedicated `setInterval(runScheduledReemergence, 5min)` would let 5am crosses fire while the app is open (separate from the disabled `checkTasks` interval).
-- **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework in `report.md`).
+- **Missed-cross counting** — a due scan increments `repeatStack` by 1 and jumps `nextRepeatDate` to the next cross after now, so crosses missed while the app was closed are undercounted (30 days closed → ×1 on a daily task). Deferred.
+- **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework in `untracked/report.md`).
+- **README refresh** — README still claims SW background sync, repeat notifications, and the old repeat list; rewrite pending.
 
 ---
 
@@ -20,7 +21,7 @@ The repeatable task rework (fixed-schedule re-emergence) is implemented and merg
 | File | Purpose |
 |------|---------|
 | `index.html` | Single-page HTML structure. Contains the task panel, settings dialog, add/edit dialog, and confirm dialog. Loads all CSS themes and the JS bundle. |
-| `app.js` | All application logic (~2800 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, profile management, data import/export. |
+| `app.js` | All application logic (~2900 lines). DOM manipulation, IndexedDB operations, rendering, filtering, pagination, notifications, theme switching, profile management, data import/export. |
 | `styles.css` | Base styles and CSS custom properties (colors, radii, transitions, spacing). Defines the "Classic" theme. Includes base layout, components, badges, trash actions, pagination, and responsive breakpoints. |
 | `girly.css` | Pink/pastel theme override — rounded corners, soft shadows, pink accent colors. |
 | `suave.css` | Dark navy theme — sharp corners, no shadows, cool blue/red palette, Inter font. |
@@ -47,7 +48,7 @@ Todo {
   deadline: number | null   // Unix timestamp
   duration: string | null  // '5' | '10' | '30' | '60' | 'multi'
   importance: 'high' | 'medium' | 'low'
-  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'biyearly' | 'yearly' | '' ('30s' legacy-only)
+  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'biyearly' | 'yearly'; '' = no repeat; '30s' legacy-only
   notes: string          // Free-form notes (dialog textarea)
   subtasks: Array<{id: string, text, done}>  // id is a UUID string (crypto.randomUUID) — unlike numeric todo/profile ids
   attachments: Array<{id, name, type, size, blob: Blob}>  // File attachments
@@ -95,7 +96,7 @@ The `init()` call has a top-level `.catch()` that logs and alerts, so a failed
 open no longer leaves a silently blank page.
 
 addTodo() → dbAdd() → prepend item + updateFooter()
-toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter() (completing a repeatable sets nextRepeatDate on the fixed schedule and clears any stack; decompleting re-sets it from now)
+toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter() (completing a repeatable sets nextRepeatDate on the fixed schedule and resets any stack to 0; decompleting re-sets it from now)
 deleteTodo() → dbPut() → removeTodoFromDOM() + updateFooter() + renderSettingsTrash() (if trash tab open)
 restoreTrash() → dbPut() → render() (re-renders main list + trash tab)
 permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
@@ -196,12 +197,12 @@ In the dark themes (`gothic`, `suave`), `--color-primary` is too dark to read as
 ### Notifications
 
 Browser Notification API. Grouped notifications (`sendGroupedNotification`) support:
-- Task re-emergence (repeatable tasks) — currently not emitted; `runScheduledReemergence` logs only
-- Urgency changes — the only type currently emitted (via `checkTasks`)
+- Task re-emergence (repeatable tasks) — not emitted; `runScheduledReemergence` logs only
+- Urgency changes — the only type wired (via `checkTasks`), but currently unreachable: `init()` seeds `lastUrgencyMap` right before the first `checkTasks()` run, so no change is ever detected, and the periodic interval is disabled
 
 Notification click focuses or opens the app window (handled by SW).
 
-Currently dormant — the only caller (`checkTasks`) runs once at init and the periodic interval is disabled (see Known Decisions).
+The whole path is dormant until the notifications rework (separate branch; see `untracked/report.md`).
 
 ### Service Worker
 
@@ -217,7 +218,6 @@ Development strategy: **network-first** with stale-while-revalidate caching. Alw
 
 ### Incremental DOM Updates
 
-- `moveTo()` — removes element from source list, appends to target list (no full re-render)
 - `updateTodoInDOM()` — finds element by `data-id`, replaces with updated version
 - `removeTodoFromDOM()` — removes element by `data-id`
 - `permanentDeleteTrash()` — swaps in next-page item from the trash list
@@ -242,7 +242,7 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 ## Known / Intentional Design Decisions
 
 1. **In-memory arrays as source of truth** — IndexedDB is the persistence layer, but JS arrays drive the UI. Manual DB edits will desync until page reload.
-2. **5-minute `checkTasks()` interval disabled** — `checkTasks` is urgency-only now and runs once on init. Urgency notifications are paused until the interval is re-enabled (see the deferred bundle in `report.md`).
+2. **5-minute `checkTasks()` interval disabled** — `checkTasks` is urgency-only now and runs once on init. Urgency notifications are paused until the interval is re-enabled (see the deferred bundle in `untracked/report.md`).
 3. **Trash ignores filters** — The settings trash shows all deleted items regardless of active filter state.
 4. **Single dialog for add and edit** — `#add-task-dialog` is reused; `editingTodoId` distinguishes the mode.
 5. **iOS zoom backstop is scoped, not global** — each form control declares `font-size: 1rem` explicitly; a `@media (pointer: coarse)` rule forces `16px !important` on touch devices only, where mobile browsers auto-zoom on focus of sub-16px inputs. Desktop rendering is governed purely by the explicit declarations.
@@ -254,7 +254,7 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 11. **Stacking resets on completion** — completing (or decompleting) a repeatable resets `repeatStack` to 0; the stack only accumulates while the task sits active across cycle crosses. Restoring an active repeatable from trash re-anchors `nextRepeatDate` to now but keeps any existing stack.
 12. **Soft delete has no confirm** — the trash is the safety net; all other destructive actions (permanent delete, profile delete, overwriting imports, purge, clear all) use the custom confirm dialog with the danger variant.
 13. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
-14. **Re-emerged tasks keep their original sort position** — sorted by original `createdAt`, not moved to the top of the list.
+14. **No periodic background run** — PWA background sync doesn't fire in a controlled manner, so re-emergence/stacking fires on page load and profile switch only; crosses missed in between are processed (as a single scan) on next open.
 15. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
 
 ---
