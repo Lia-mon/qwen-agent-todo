@@ -10,7 +10,6 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 The repeatable task rework (fixed-schedule re-emergence) is implemented and merged. Open decisions:
 
-- **Periodic run while open** — re-emergence currently fires on page load and profile switch only. A dedicated `setInterval(runScheduledReemergence, 5min)` would let 5am crosses fire while the app is open (separate from the disabled `checkTasks` interval).
 - **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework).
 - **Live countdowns** — `updateTimers()` has no live caller (the 5-minute interval is commented out in `init()`), so deadline countdown badges freeze at their rendered value until reload. Re-enabling the interval (or a lighter one) restores live countdowns and urgency notifications.
 
@@ -89,8 +88,8 @@ init()
   │              "another tab is open" banner if the upgrade is blocked)
   ├── ensureStore() — recreate DB if a store is missing
   ├── resolveCurrentProfile() — pick saved/first profile, persist choice
+  ├── runScheduledReemergence() — re-emerge due repeatables across all profiles (DB-only)
   ├── dbGet(profileId) — load that profile's active/completed/deleted into memory
-  ├── runScheduledReemergence() — re-emerge due repeatables (all profiles)
   ├── lastUrgencyMap seed → checkTasks() — one-shot urgency tracking
   ├── render() — build DOM from memory arrays
   └── event listeners setup
@@ -145,7 +144,7 @@ Repeatable tasks re-emerge on **fixed calendar crosses** (local time), not offse
 | `yearly` (Yearly) | Jan 1 5am |
 
 - Completing a repeatable task sets `nextRepeatDate = nextCrossMoment(repeat, now)` — the next fixed moment strictly after completion. Decompleting or re-emerging **deletes** the field (never sets it to `null` — `null` is a valid IndexedDB key that would stay in the index).
-- `runScheduledReemergence()` re-emerges due tasks **across all profiles**: it scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`), moves each back to active (`completed = 0`, `completedAt = null`, field deleted), and re-renders. Runs on `init()` and on every `activateProfile()` (profile switch / full-data restore).
+- `runScheduledReemergence()` re-emerges due tasks **across all profiles**: it scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`) and moves each back to active (`completed = 0`, `completedAt = null`, field deleted, subtasks reset). Pure DB operation — it runs before the profile's `dbGet` in `init()` and `activateProfile()` (profile switch / full-data restore), so the fresh load picks up the re-emerged state.
 - Editing a completed repeatable recomputes `nextRepeatDate` from `completedAt` (or deletes it if the repeat was removed).
 - Re-emerged tasks keep their original `createdAt` sort position (they don't jump to the top of the list).
 - Re-emerging resets subtask progress (all subtasks back to unchecked) — a new cycle starts fresh. Decompleting a completed task does **not** reset subtasks (same cycle is resumed).

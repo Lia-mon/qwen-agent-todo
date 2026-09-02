@@ -655,10 +655,10 @@ async function loadProfile(id) {
 async function activateProfile(id) {
   currentProfileId = id;
   localStorage.setItem('activeProfile', String(id));
+  await runScheduledReemergence();
   ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((a, b) => b.completedAt - a.completedAt);
-  await runScheduledReemergence();
   completedPage = 1;
   trashPage = 1;
   lastUrgencyMap.clear();
@@ -902,11 +902,10 @@ function nextCrossMoment(repeat, afterMs) {
 
 /**
  * Re-emerges completed repeatable tasks whose `nextRepeatDate` has
- * arrived — across all profiles. Each re-emerged task moves back to
- * active; its `nextRepeatDate` is cleared and is re-set (on the fixed
- * schedule, via nextCrossMoment) the next time the task is completed.
- *
- * Not wired into init()/intervals yet.
+ * arrived — across all profiles. Pure DB operation: each re-emerged
+ * task moves back to active (`completed = 0`, `completedAt = null`,
+ * `nextRepeatDate` deleted, subtasks reset). Callers run this before
+ * their `dbGet` so the fresh load picks up the re-emerged state.
  * @returns {Promise<void>}
  */
 async function runScheduledReemergence() {
@@ -920,20 +919,16 @@ async function runScheduledReemergence() {
     todo.completed = 0;
     todo.completedAt = null;
     delete todo.nextRepeatDate;
+    // New cycle: reset subtask progress (decompleting keeps it — same cycle).
+    if (todo.subtasks?.length) {
+      todo.subtasks = todo.subtasks.map(s => ({ ...s, done: false }));
+    }
     await dbPut(todo);
     reemerged++;
-    // Keep the current profile's in-memory arrays in sync.
-    const local = completed.find(t => t.id === todo.id);
-    if (!local) continue;
-    local.completed = 0;
-    local.completedAt = null;
-    delete local.nextRepeatDate;
-    completed.splice(completed.indexOf(local), 1);
-    binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
   }
-  if (reemerged === 0) return;
-  render();
-  console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged`);
+  if (reemerged > 0) {
+    console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged`);
+  }
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -2725,10 +2720,10 @@ async function init() {
   await openDB();
   await ensureStore();
   currentProfileId = await resolveCurrentProfile();
+  await runScheduledReemergence();
   ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((t1,t2)=>t2.completedAt - t1.completedAt);
-  await runScheduledReemergence();
   active.forEach(todo => {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
