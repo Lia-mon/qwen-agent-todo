@@ -1675,6 +1675,9 @@ html.row-lines #completed-list > li:nth-child(even) {
   border-radius: var(--radius-md);
   padding: 6px 12px;
   user-select: none;
+  display:flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* ── Reduced Motion ─────────────────────────────────────────── */
