@@ -8,7 +8,7 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 ## Next Up
 
-The repeatable task rework (fixed-schedule re-emergence) is implemented and merged. Open decisions:
+The repeatable task rework (fixed-schedule re-emergence + stacking) is implemented and merged. Open items:
 
 - **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework).
 - **Live countdowns** — `updateTimers()` has no live caller (the 5-minute interval is commented out in `init()`), so deadline countdown badges freeze at their rendered value until reload. Re-enabling the interval (or a lighter one) restores live countdowns and urgency notifications.
@@ -51,7 +51,7 @@ Todo {
   deadline: number | null   // Unix timestamp
   duration: string | null  // '5' | '10' | '30' | '60' | 'multi'
   importance: 'high' | 'medium' | 'low'
-  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'biyearly' | 'yearly' | '' ('30s' legacy-only)
+  repeat: string | null  // 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'biyearly' | 'yearly'; '' = no repeat; '30s' legacy-only
   notes: string          // Free-form notes (dialog textarea)
   subtasks: Array<{id: string, text, done}>  // id is a UUID string (crypto.randomUUID) — unlike numeric todo/profile ids
   attachments: Array<{id, name, type, size, blob: Blob}>  // File attachments
@@ -59,7 +59,8 @@ Todo {
   completedAt: number | null
   deleted: number        // 0 = not deleted, 1 = trashed
   deletedAt: number | null
-  nextRepeatDate: number  // Next fixed re-emergence moment; present only on completed repeatables, deleted (never nulled) otherwise
+  nextRepeatDate: number  // Next fixed cycle moment; present on all repeatable tasks (active or completed), deleted (never nulled) otherwise
+  repeatStack: number     // Count of crossed cycles stacked while the task was still active (0 when none)
   profileId: number              // Owning profile (profiles store)
 }
 ```
@@ -90,6 +91,7 @@ init()
   ├── resolveCurrentProfile() — pick saved/first profile, persist choice
   ├── runScheduledReemergence() — re-emerge due repeatables across all profiles (DB-only)
   ├── dbGet(profileId) — load that profile's active/completed/deleted into memory
+  ├── runScheduledReemergence() — process due repeatables: re-emerge or stack (all profiles)
   ├── lastUrgencyMap seed → checkTasks() — one-shot urgency tracking
   ├── render() — build DOM from memory arrays
   └── event listeners setup
@@ -98,7 +100,7 @@ The `init()` call has a top-level `.catch()` that logs and alerts, so a failed
 open no longer leaves a silently blank page.
 
 addTodo() → dbAdd() → prepend item + updateFooter()
-toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter() (completing a repeatable sets nextRepeatDate on the fixed schedule)
+toggleTodo() → dbPut() → removeTodoFromDOM() + updateFooter() (completing a repeatable sets nextRepeatDate on the fixed schedule and resets any stack to 0; decompleting re-sets it from now)
 deleteTodo() → dbPut() → removeTodoFromDOM() + updateFooter() + renderSettingsTrash() (if trash tab open)
 restoreTrash() → dbPut() → render() (re-renders main list + trash tab)
 permanentDeleteTrash() → dbDelete() → animate + remove → update pagination
@@ -132,9 +134,9 @@ purgeAllTrash() → manual (Data Management): permanently deletes trash >30 days
 
 ### Repeatable Tasks
 
-Repeatable tasks re-emerge on **fixed calendar crosses** (local time), not offset intervals:
+Repeatable tasks track their next fixed calendar cross at **all times** (local time), not just while completed:
 
-| Repeat (UI label) | Re-emerges at |
+| Repeat (UI label) | Cycle crosses at |
 |-------------------|---------------|
 | `daily` (Daily) | Every day, 5am |
 | `biweekly` (Twice Weekly) | Wednesday 5pm or Sunday 5am, whichever is next |
@@ -143,12 +145,14 @@ Repeatable tasks re-emerge on **fixed calendar crosses** (local time), not offse
 | `biyearly` (Twice Yearly) | Jul 1 5am or Jan 1 5am, whichever is next |
 | `yearly` (Yearly) | Jan 1 5am |
 
-- Completing a repeatable task sets `nextRepeatDate = nextCrossMoment(repeat, now)` — the next fixed moment strictly after completion. Decompleting or re-emerging **deletes** the field (never sets it to `null` — `null` is a valid IndexedDB key that would stay in the index).
-- `runScheduledReemergence()` re-emerges due tasks **across all profiles**: it scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`) and moves each back to active (`completed = 0`, `completedAt = null`, field deleted, subtasks reset). Pure DB operation — it runs before the profile's `dbGet` in `init()` and `activateProfile()` (profile switch / full-data restore), so the fresh load picks up the re-emerged state.
+- `nextRepeatDate` is maintained via `syncNextRepeatDate(todo, afterMs)` at every state change: add, edit, complete, decomplete, and restore-from-trash. Completing anchors it to `completedAt`; active tasks anchor to now (an existing still-future date is kept on edit unless the repeat changed).
+- **Stacking** — when a due scan finds an active task past its `nextRepeatDate`, it does not re-emerge; instead every cross missed since the stored date (the stored date itself is due and counts) is added to `repeatStack`, and `nextRepeatDate` advances to the first cross after now. Missed cycles accumulate (shown as an `x N` suffix on the title, where N = repeatStack + 1, i.e. total cycles owed; coloured per theme via `--stack-count`) until the task is completed, which resets the stack. Due active tasks are grouped by repeat value: all tasks of a type land on the same final date, so it is computed once per type; each task's missed crosses are counted in O(1) by `crossesCount` (shift-and-compare calendar arithmetic, DST-safe).
+- **Re-emergence** — when a cycle cross arrives while the task is completed, `runScheduledReemergence()` moves it back to active (`completed = 0`, `completedAt = null`) and re-anchors `nextRepeatDate` to the next cross from now — re-emerged tasks carry a next cycle just like any other active repeatable. The stored cross is consumed by the re-emergence itself; any crosses after it (while the app was closed) are added to `repeatStack`, so a task re-emerging after a long gap arrives stacked, exactly as if the app had been open and it had re-emerged on the first cross and stacked the rest. It scans the `nextRepeatDate` index for records ≤ now (`dbGetDueTodos`) **across all profiles** and logs counts. It is a pure DB operation: it runs before the profile load in `init()` and `activateProfile()` (profile switch / full-data restore), so the fresh `dbGet` picks up the re-emerged/stacked state.
+- Re-emerging resets subtask progress (all subtasks back to unchecked) — a new cycle starts fresh. Decompleting a completed task does **not** reset subtasks (same cycle is resumed).
 - Editing a completed repeatable recomputes `nextRepeatDate` from `completedAt` (or deletes it if the repeat was removed).
 - Re-emerged tasks keep their original `createdAt` sort position (they don't jump to the top of the list).
-- Re-emerging resets subtask progress (all subtasks back to unchecked) — a new cycle starts fresh. Decompleting a completed task does **not** reset subtasks (same cycle is resumed).
-- Legacy `'30s'` repeat values have no fixed schedule: `nextCrossMoment` returns `null`, so completed legacy tasks re-emerge once at their stored `nextRepeatDate` (if any) and then stop repeating.
+- Legacy `'30s'` repeat values have no fixed schedule: `nextCrossMoment` returns `null`, so `syncNextRepeatDate` deletes the field and legacy tasks stop repeating once their stored `nextRepeatDate` (if any) is processed.
+- The cross math is pinned by `tools/cross-tests.js` (property test of `crossesCount` vs the per-cross loop, plus open-app vs closed-app equivalence); re-run it across timezones if `nextCrossMoment` ever changes.
 
 ### Urgency System
 
@@ -201,12 +205,12 @@ In the dark themes (`gothic`, `suave`), `--color-primary` is too dark to read as
 ### Notifications
 
 Browser Notification API. Grouped notifications (`sendGroupedNotification`) support:
-- Task re-emergence (repeatable tasks) — currently not emitted; `runScheduledReemergence` logs only
-- Urgency changes — the only type currently emitted (via `checkTasks`)
+- Task re-emergence (repeatable tasks) — not emitted; `runScheduledReemergence` logs only
+- Urgency changes — the only type wired (via `checkTasks`), but currently unreachable: `init()` seeds `lastUrgencyMap` right before the first `checkTasks()` run, so no change is ever detected, and the periodic interval is disabled
 
 Notification click focuses or opens the app window (handled by SW).
 
-Currently dormant — the only caller (`checkTasks`) runs once at init and the periodic interval is disabled (see Known Decisions).
+The whole path is dormant until the notifications rework (separate branch; see `untracked/report.md`).
 
 - The **notification toggle** only requests permission when checked; it is not persisted and not initialized from `Notification.permission` (the checkbox always starts off; unchecking does nothing).
 - **`sendForegroundNotification()`** (a "N active tasks" summary notification) is dead code — its 300s interval caller is commented out in `init()`.
@@ -237,6 +241,8 @@ Development strategy: **network-first** with cache fallback. Always fetches fres
 - `serializeAttachments()` / `deserializeAttachments()` — base64 data URLs for export/import round-trips
 - `activateProfile(id)` — shared profile-activation body (load, sort, reset pagination, re-seed `lastUrgencyMap`, render)
 - `nextCrossMoment(repeat, afterMs)` — next fixed re-emergence moment for a repeat value, strictly after `afterMs` (local time); `null` for values outside the schedule
+- `crossesCount(repeat, lastMs, nowMs)` — O(1) count of fixed crosses in [lastMs, nowMs] (`lastMs` counts as the due stored moment); shift-and-compare calendar arithmetic, DST-safe; `null` for repeats with no fixed schedule
+- `syncNextRepeatDate(todo, afterMs)` — sets (or deletes) `todo.nextRepeatDate` from its repeat value; the single write-site for the field
 - `dbGetDueTodos(nowMs)` — `nextRepeatDate` index scan for records ≤ now
 - `showConfirm(message, danger)` — Promise-based confirm dialog (replaces `confirm()`); `danger` styles the confirm button as destructive
 
@@ -249,14 +255,14 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 ## Known / Intentional Design Decisions
 
 1. **In-memory arrays as source of truth** — IndexedDB is the persistence layer, but JS arrays drive the UI. Manual DB edits will desync until page reload.
-2. **5-minute `checkTasks()` interval disabled** — `checkTasks` is urgency-only now and runs once on init. Urgency notifications are paused until the interval is re-enabled (see the deferred bundle in `report.md`).
+2. **5-minute `checkTasks()` interval disabled** — `checkTasks` is urgency-only now and runs once on init. Urgency notifications are paused until the interval is re-enabled (see the deferred bundle in `untracked/report.md`).
 3. **Trash ignores filters** — The settings trash shows all deleted items regardless of active filter state.
 4. **Single dialog for add and edit** — `#add-task-dialog` is reused; `editingTodoId` distinguishes the mode.
 5. **iOS zoom backstop is scoped, not global** — each form control declares `font-size: 1rem` explicitly; a `@media (pointer: coarse)` rule forces `16px !important` on touch devices only, where mobile browsers auto-zoom on focus of sub-16px inputs. Desktop rendering is governed purely by the explicit declarations.
 6. **`addTodo` prepends regardless of active filters** — a new task should appear immediately even if it doesn't match the current filter.
 7. **`clearAllData` clears the entire todos store** — all profiles, not just the current one; the confirm text says "ALL data" on purpose.
 8. **Subtask ids are UUID strings, todo/profile ids are numbers** — never `Number()` a subtask id.
-9. **`30s` repeat value is legacy** — removed from the UI and from the code (`getRepeatMs` is gone). `nextCrossMoment` returns `null` for it, so completed legacy tasks re-emerge once at their stored `nextRepeatDate` and then stop repeating.
+9. **`30s` repeat value is legacy** — removed from the UI and from the code (`getRepeatMs` is gone). `nextCrossMoment` returns `null` for it, so legacy tasks stop repeating once their stored `nextRepeatDate` is processed (re-emergence if completed, field deletion if active).
 10. **`nextRepeatDate` is deleted, never nulled** — `null` is a valid IndexedDB key that sorts below all numbers and would keep the record in the `nextRepeatDate` index forever.
 11. **Soft delete has no confirm** — the trash is the safety net; all other destructive actions (permanent delete, profile delete, overwriting imports, purge, clear all) use the custom confirm dialog with the danger variant.
 12. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
@@ -264,6 +270,9 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 14. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
 15. **Notification and Reduce Motion toggles are not persisted** — both reset on reload; the notification checkbox is not initialized from `Notification.permission`.
 16. **`updateTimers()` has no live caller** — deadline countdown badges freeze at their rendered value until reload; re-enabling the 5-minute interval restores them (see Next Up).
+17. **Re-emergence consumes one cross** — a completed task re-emerges on its stored cross (that cross is not stacked); crosses after it, while the app was closed, stack on re-emergence, matching what an always-open app would have accumulated. Time spent in trash still doesn't stack (restoring re-anchors from now, keeping any existing stack).
+18. **No periodic background run** — PWA background sync doesn't fire in a controlled manner, so re-emergence/stacking fires on page load and profile switch only; crosses missed in between are counted (as a single scan) on next open.
+19. **Stacking resets on completion** — completing (or decompleting) a repeatable resets `repeatStack` to 0; the stack only accumulates while the task sits active across cycle crosses. Restoring an active repeatable from trash re-anchors `nextRepeatDate` to now but keeps any existing stack.
 
 ---
 

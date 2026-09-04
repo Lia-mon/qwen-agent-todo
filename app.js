@@ -14,7 +14,8 @@
  * @property {'high' | 'medium' | 'low'} importance - Task priority level
  * @property {number | null} deadline - Unix timestamp of deadline (null if none)
  * @property {string | null} duration - Duration string: '5' | '10' | '30' | '60' | 'multi' | null
- * @property {number} [nextRepeatDate] - Next re-emergence timestamp (only for completed repeatable tasks)
+ * @property {number} [nextRepeatDate] - Next cycle timestamp for repeatable tasks (active or completed); deleted, never nulled
+ * @property {number} repeatStack - Count of crossed cycles stacked while the task was still active (0 when none)
  * @property {number} profileId - ID of the profile this todo belongs to
  */
 
@@ -901,34 +902,149 @@ function nextCrossMoment(repeat, afterMs) {
 }
 
 /**
- * Re-emerges completed repeatable tasks whose `nextRepeatDate` has
- * arrived — across all profiles. Pure DB operation: each re-emerged
- * task moves back to active (`completed = 0`, `completedAt = null`,
- * `nextRepeatDate` deleted, subtasks reset). Callers run this before
- * their `dbGet` so the fresh load picks up the re-emerged state.
+ * Counts the fixed crosses of `repeat` in [lastMs, nowMs] in O(1) via
+ * shift-and-compare: shift both timestamps back by the boundary's
+ * wall-clock hour so the boundary lands on MIDNIGHT in the shifted frame,
+ * then count with calendar-tuple arithmetic. `lastMs` itself counts as one
+ * cross (the due stored moment). All times are local.
+ * The shift is a WALL-CLOCK shift (rebuild the tuple with hour - h and let
+ * Date normalize), NOT ms subtraction — subtracting ms across a DST
+ * transition shifts the wall clock by 4 or 6 hours and corrupts the
+ * comparison.
+ * @param {string} repeat
+ * @param {number} lastMs
+ * @param {number} nowMs
+ * @returns {number|null} - null for repeats with no fixed schedule
+ */
+function crossesCount(repeat, lastMs, nowMs) {
+  if (nowMs < lastMs) return 0;
+
+  const shift = (ms, h) => {
+    const t = new Date(ms);
+    return new Date(
+      t.getFullYear(), t.getMonth(), t.getDate(),
+      t.getHours() - h, t.getMinutes(), t.getSeconds(), t.getMilliseconds(),
+    );
+  };
+
+  const l5 = shift(lastMs, 5), n5 = shift(nowMs, 5);
+  const l17 = shift(lastMs, 17), n17 = shift(nowMs, 17);
+
+  const monthKey = (t) => t.getFullYear() * 12 + (t.getMonth() + 1);
+  // DST-safe day ordinal, built from the tuple (not from ms)
+  const dayIndex = (t) =>
+    Math.floor(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86400000);
+
+  // weekday-T midnights in (l, n] (l, n already shifted so T's boundary
+  // is a midnight); the boolean "crossed?" is just this > 0
+  const weekdayOpen = (l, n, T) => {
+    const d = dayIndex(n) - dayIndex(l);
+    const k = (n.getDay() - T + 7) % 7;
+    return Math.max(0, Math.ceil((d - k) / 7));
+  };
+
+  // month-m-1st midnights in (l, n]
+  const monthOpen = (l, n, m) =>
+    Math.floor((monthKey(n) - m) / 12) - Math.floor((monthKey(l) - m) / 12);
+
+  switch (repeat) {
+    case 'daily': return dayIndex(n5) - dayIndex(l5) + 1;
+    case 'weekly': return weekdayOpen(l5, n5, 0) + 1;
+    case 'biweekly': return weekdayOpen(l17, n17, 3) + weekdayOpen(l5, n5, 0) + 1;
+    case 'monthly': return monthKey(n5) - monthKey(l5) + 1;
+    case 'biyearly': return monthOpen(l5, n5, 7) + monthOpen(l5, n5, 1) + 1;
+    case 'yearly': return n5.getFullYear() - l5.getFullYear() + 1;
+    default: return null;
+  }
+}
+
+/**
+ * Sets (or deletes) `nextRepeatDate` for a todo based on its repeat value,
+ * strictly after `afterMs`. Deletes the field when the repeat is absent or
+ * has no fixed schedule (e.g. legacy '30s') — never sets it to null.
+ * @param {Object} todo - The todo to sync.
+ * @param {number} [afterMs] - Lower bound (exclusive), defaults to now.
+ */
+function syncNextRepeatDate(todo, afterMs = Date.now()) {
+  if (!todo.repeat) {
+    delete todo.nextRepeatDate;
+    return;
+  }
+  const next = nextCrossMoment(todo.repeat, afterMs);
+  if (next != null) todo.nextRepeatDate = next;
+  else delete todo.nextRepeatDate;
+}
+
+/**
+ * Processes repeatable tasks whose `nextRepeatDate` has arrived — across
+ * all profiles. Pure DB operation: completed tasks re-emerge (they move
+ * back to active, `completedAt` cleared, `nextRepeatDate` re-anchored to
+ * the next fixed moment, subtasks reset; the stored cross is consumed by
+ * the re-emergence itself, and any crosses after it — while the app was
+ * closed — are added to `repeatStack`); due active tasks stack (every
+ * cross missed since their stored date is added to `repeatStack` and
+ * `nextRepeatDate` advances to the next fixed moment, so missed cycles
+ * accumulate until the task is completed, which resets the stack. Due
+ * active tasks are grouped by repeat value: all tasks of a type land on
+ * the same final date, so it is computed once per type. Callers run this
+ * before their `dbGet` so the fresh load picks up the re-emerged/stacked
+ * state.
  * @returns {Promise<void>}
  */
 async function runScheduledReemergence() {
   const now = Date.now();
   const due = await dbGetDueTodos(now);
   let reemerged = 0;
+  let stacked = 0;
+
+  // First pass: re-emerge completed tasks, group due active tasks by repeat.
+  const activeByRepeat = new Map();
   for (const todo of due) {
     // The index only matches records that have a nextRepeatDate, but
     // trashed completed repeatables keep theirs — skip those.
-    if (todo.deleted !== 0 || todo.completed !== 1 || !todo.repeat) continue;
-    todo.completed = 0;
-    todo.completedAt = null;
-    delete todo.nextRepeatDate;
-    // New cycle: reset subtask progress (decompleting keeps it — same cycle).
-    if (todo.subtasks?.length) {
-      todo.subtasks = todo.subtasks.map(s => ({ ...s, done: false }));
+    if (todo.deleted !== 0 || !todo.repeat) continue;
+    if (todo.completed === 1) {
+      // Re-emerge: completed → active. The stored cross is consumed by the
+      // re-emergence itself; any crosses after it (app was closed) stack,
+      // matching what would have accumulated had the app been open.
+      todo.completed = 0;
+      todo.completedAt = null;
+      const crossed = crossesCount(todo.repeat, todo.nextRepeatDate, now);
+      todo.repeatStack = crossed != null ? crossed - 1 : 0;
+      syncNextRepeatDate(todo);
+      // New cycle: reset subtask progress (decompleting keeps it — same cycle).
+      if (todo.subtasks?.length) {
+        todo.subtasks = todo.subtasks.map(s => ({ ...s, done: false }));
+      }
+      await dbPut(todo);
+      reemerged++;
+    } else {
+      if (!activeByRepeat.has(todo.repeat)) activeByRepeat.set(todo.repeat, []);
+      activeByRepeat.get(todo.repeat).push(todo);
     }
-    await dbPut(todo);
-    reemerged++;
   }
-  if (reemerged > 0) {
-    console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged`);
+
+  // Second pass: stack due active tasks. All tasks of a repeat type land
+  // on the same final date, so compute it once per type.
+  for (const [repeat, group] of activeByRepeat) {
+    const final = nextCrossMoment(repeat, now);
+    for (const todo of group) {
+      if (final == null) {
+        // Legacy repeat with no fixed schedule: stop tracking it.
+        delete todo.nextRepeatDate;
+      } else {
+        // Count every cross in [stored, now] — the stored date is itself
+        // due (it's in the scan), so it counts as a missed cross too.
+        todo.repeatStack = (todo.repeatStack || 0) + crossesCount(repeat, todo.nextRepeatDate, now);
+        todo.nextRepeatDate = final;
+      }
+      await dbPut(todo);
+      stacked++;
+    }
   }
+
+  if (reemerged === 0 && stacked === 0) return;
+  console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged, ${stacked} task(s) stacked`);
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -1034,6 +1150,15 @@ function buildItem(todo, view) {
     const textEl = document.createElement('span');
     textEl.className = 'text';
     textEl.textContent = todo.text;
+
+    if (todo.repeatStack > 0) {
+      // Stacked cycles shown on the title: total cycles owed (missed + current)
+      const stackCount = document.createElement('span');
+      stackCount.className = 'stack-count';
+      stackCount.textContent = `x ${todo.repeatStack + 1}`;
+      stackCount.title = `${todo.repeatStack} missed cycle${todo.repeatStack > 1 ? 's' : ''} stacked — complete to clear`;
+      textEl.appendChild(stackCount);
+    }
 
     const meta = document.createElement('div');
     meta.className = 'meta';
@@ -1842,6 +1967,7 @@ async function addTodo(text, repeat, importance, deadlineStr, duration, notes, s
     deletedAt: null,
     profileId: currentProfileId
   };
+  syncNextRepeatDate(todo);
   const id = await dbAdd(todo);
   todo.id = id;
   active.unshift(todo);
@@ -1869,12 +1995,15 @@ async function updateTodo(id, text, repeat, importance, deadlineStr, duration, n
   if (!todo) return;
 
   todo.text = text;
+  const prevRepeat = todo.repeat;
   todo.repeat = repeat || null;
-  // Keep the pending re-emergence in sync with the (possibly changed) repeat.
+  // Keep the next cycle in sync with the (possibly changed) repeat.
+  // Completed tasks anchor to completedAt; active tasks keep a still-future
+  // date unless the repeat changed or the date already passed.
   if (todo.completed === 1) {
-    const next = nextCrossMoment(todo.repeat, todo.completedAt || Date.now());
-    if (next != null) todo.nextRepeatDate = next;
-    else delete todo.nextRepeatDate;
+    syncNextRepeatDate(todo, todo.completedAt || Date.now());
+  } else if (prevRepeat !== todo.repeat || !todo.nextRepeatDate || todo.nextRepeatDate <= Date.now()) {
+    syncNextRepeatDate(todo);
   }
   todo.importance = importance;
   todo.duration = duration;
@@ -1939,20 +2068,21 @@ async function toggleTodo(id) {
   if (!todo) return;
 
   if (todo.completed === 0) {
-    // Complete: active → completed
+    // Complete: active → completed (any stacked cycles are consumed)
     todo.completed = 1;
     todo.completedAt = Date.now();
-    const next = nextCrossMoment(todo.repeat, Date.now());
-    if (next != null) todo.nextRepeatDate = next;
+    syncNextRepeatDate(todo);
+    todo.repeatStack = 0;
     const idx = active.indexOf(todo);
     if (idx > -1) active.splice(idx, 1);
     binaryInsert(completed, todo, (a, b) => b.completedAt - a.completedAt);
     removeTodoFromDOM(todo.id);
   } else {
-    // Decomplete: completed → active
+    // Decomplete: completed → active (fresh schedule from now)
     todo.completed = 0;
     todo.completedAt = null;
-    delete todo.nextRepeatDate;
+    syncNextRepeatDate(todo);
+    todo.repeatStack = 0;
     const idx = completed.indexOf(todo);
     if (idx > -1) completed.splice(idx, 1);
     binaryInsert(active, todo, (a, b) => b.createdAt - a.createdAt);
@@ -2008,6 +2138,8 @@ async function restoreTrash(id) {
   const wasCompleted = todo.completed === 1;
   todo.deleted = 0;
   todo.deletedAt = null;
+  // Restored active repeatables get a fresh next cycle from now.
+  if (!wasCompleted) syncNextRepeatDate(todo);
 
   deleted.splice(idx, 1);
   if (wasCompleted) {
