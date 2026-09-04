@@ -93,8 +93,7 @@ body {
 
   --badge-repeatable-bg: #eafaf1;
   --badge-repeatable-fg: #15803d;
-  --badge-stacked-bg: #fff4e0;
-  --badge-stacked-fg: #9a6208;
+  --stack-count: #9a6208;
   --badge-deadline-bg: #f0f0f0;
   --badge-deadline-fg: #666;
   --badge-note-bg: #f0f0f0;
@@ -1217,7 +1216,7 @@ body {
 .badge.urgency-lax { background: var(--badge-urgency-lax-bg); color: var(--badge-urgency-lax-fg); }
 
 .badge.repeatable { background: var(--badge-repeatable-bg); color: var(--badge-repeatable-fg); }
-.badge.stacked { background: var(--badge-stacked-bg); color: var(--badge-stacked-fg); }
+.stack-count { color: var(--stack-count); font-weight: 600; margin-left: 0.4em; white-space: nowrap; }
 .badge.deadline { background: var(--badge-deadline-bg); color: var(--badge-deadline-fg); font-size: 0.65rem; }
 .badge.note { background: var(--badge-note-bg); color: var(--badge-note-fg); }
 .badge.subtasks { background: var(--badge-subtasks-bg); color: var(--badge-subtasks-fg); }

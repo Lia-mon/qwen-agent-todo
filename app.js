@@ -1110,6 +1110,15 @@ function buildItem(todo, view) {
     textEl.className = 'text';
     textEl.textContent = todo.text;
 
+    if (todo.repeatStack > 0) {
+      // Stacked cycles shown on the title: total cycles owed (missed + current)
+      const stackCount = document.createElement('span');
+      stackCount.className = 'stack-count';
+      stackCount.textContent = `x ${todo.repeatStack + 1}`;
+      stackCount.title = `${todo.repeatStack} missed cycle${todo.repeatStack > 1 ? 's' : ''} stacked — complete to clear`;
+      textEl.appendChild(stackCount);
+    }
+
     const meta = document.createElement('div');
     meta.className = 'meta';
 
@@ -1131,14 +1140,6 @@ function buildItem(todo, view) {
       repBadge.className = 'badge repeatable';
       repBadge.textContent = todo.repeat;
       meta.appendChild(repBadge);
-    }
-
-    if (todo.repeatStack > 0) {
-      const stackBadge = document.createElement('span');
-      stackBadge.className = 'badge stacked';
-      stackBadge.textContent = `×${todo.repeatStack}`;
-      stackBadge.title = `${todo.repeatStack} missed cycle${todo.repeatStack > 1 ? 's' : ''} stacked — complete to clear`;
-      meta.appendChild(stackBadge);
     }
 
     if (todo.deadline) {
