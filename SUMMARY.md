@@ -8,10 +8,10 @@ A vanilla HTML/CSS/JS **Progressive Web App** (PWA) for tracking tasks with repe
 
 ## Next Up
 
-The repeatable task rework (fixed-schedule re-emergence + stacking) is implemented and merged. Open items:
+The repeatable task rework (fixed-schedule re-emergence + stacking) is merged. The notifications rework is in progress on the `notifications` branch:
 
-- **Re-emergence notifications** — `runScheduledReemergence()` logs only; the old "N tasks re-emerged" notification is not wired in (part of the notifications rework).
-- **Live countdowns** — `updateTimers()` has no live caller (the 5-minute interval is commented out in `init()`), so deadline countdown badges freeze at their rendered value until reload. Re-enabling the interval (or a lighter one) restores live countdowns and urgency notifications.
+- **Load-time notifications** (done) — `notifyLoadEvents` announces re-emerged, stacked, and newly-urgent tasks on page load / profile switch. The OS banner needs permission; a history is kept in Settings → Notifications (recorded whenever notifications are enabled).
+- **Live countdowns / periodic urgency** (deferred) — `updateTimers()` and `checkTasks()` have no live caller (the 5-minute interval is commented out in `init()`), so deadline countdown badges freeze at their rendered value and urgency-*change* notifications never fire. Re-enabling the interval (or a lighter one) restores both.
 
 ---
 
@@ -204,15 +204,15 @@ In the dark themes (`gothic`, `suave`), `--color-primary` is too dark to read as
 
 ### Notifications
 
-Browser Notification API. Grouped notifications (`sendGroupedNotification`) support:
-- Task re-emergence (repeatable tasks) — not emitted; `runScheduledReemergence` logs only
-- Urgency changes — the only type wired (via `checkTasks`), but currently unreachable: `init()` seeds `lastUrgencyMap` right before the first `checkTasks()` run, so no change is ever detected, and the periodic interval is disabled
+Browser Notification API. Two paths:
+
+- **Load-time notification** (`notifyLoadEvents`) — on page load and profile switch, announces tasks that re-emerged or stacked while the app was closed, plus tasks that newly became urgent (stressy). The OS banner is sent only when notifications are enabled and permission is granted; a history entry is recorded whenever notifications are enabled (so it works even without a banner). The history is shown in Settings → Notifications (capped at 50, newest first) with a Clear button.
+  - "Newly urgent" is tracked per profile in `lastUrgentIds_<profile>` so a reload doesn't re-announce the same tasks; re-emerged/stacked tasks are excluded from the urgent list to avoid duplication.
+- **Grouped notifications** (`sendGroupedNotification`) — supports re-emergence + urgency-change types, but is currently unreachable: `checkTasks` runs once at init (a no-op, since `lastUrgencyMap` was just seeded) and the periodic interval is disabled.
 
 Notification click focuses or opens the app window (handled by SW).
 
-The whole path is dormant until the notifications rework (separate branch; see `untracked/report.md`).
-
-- The **notification toggle** only requests permission when checked; it is not persisted and not initialized from `Notification.permission` (the checkbox always starts off; unchecking does nothing).
+- The **notification toggle** is persisted in `notifEnabled` and initialized from it on load; checking it requests permission (if still `default`), unchecking just clears the preference (browsers don't allow programmatic revocation).
 - **`sendForegroundNotification()`** (a "N active tasks" summary notification) is dead code — its 300s interval caller is commented out in `init()`.
 
 ### Service Worker
@@ -268,7 +268,7 @@ Tasks are never immediately removed. Deletion sets `deleted = 1` and `deletedAt 
 12. **Trash purge is manual** — the Purge Trash button (Data Management) permanently deletes trash older than 30 days across all profiles; there is no automatic purge.
 13. **Re-emerged tasks keep their original sort position** — sorted by original `createdAt`, not moved to the top of the list.
 14. **`formatTimestamp` omits the year for the current year** — the year is shown only for older tasks.
-15. **Notification and Reduce Motion toggles are not persisted** — both reset on reload; the notification checkbox is not initialized from `Notification.permission`.
+15. **Notification toggle is persisted; Reduce Motion is not** — the notification checkbox is stored in `notifEnabled` and initialized from it on load (it gates both the OS banner and the history); the Reduce Motion toggle still resets on reload.
 16. **`updateTimers()` has no live caller** — deadline countdown badges freeze at their rendered value until reload; re-enabling the 5-minute interval restores them (see Next Up).
 17. **Re-emergence consumes one cross** — a completed task re-emerges on its stored cross (that cross is not stacked); crosses after it, while the app was closed, stack on re-emergence, matching what an always-open app would have accumulated. Time spent in trash still doesn't stack (restoring re-anchors from now, keeping any existing stack).
 18. **No periodic background run** — PWA background sync doesn't fire in a controlled manner, so re-emergence/stacking fires on page load and profile switch only; crosses missed in between are counted (as a single scan) on next open.

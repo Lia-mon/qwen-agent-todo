@@ -656,7 +656,7 @@ async function loadProfile(id) {
 async function activateProfile(id) {
   currentProfileId = id;
   localStorage.setItem('activeProfile', String(id));
-  await runScheduledReemergence();
+  const reemergeResult = await runScheduledReemergence();
   ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((a, b) => b.completedAt - a.completedAt);
@@ -664,6 +664,7 @@ async function activateProfile(id) {
   trashPage = 1;
   lastUrgencyMap.clear();
   active.forEach(todo => lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration)));
+  notifyLoadEvents(reemergeResult);
   render();
   renderProfiles();
   if (activeSettingsTab === 'trash') renderSettingsTrash();
@@ -989,13 +990,14 @@ function syncNextRepeatDate(todo, afterMs = Date.now()) {
  * the same final date, so it is computed once per type. Callers run this
  * before their `dbGet` so the fresh load picks up the re-emerged/stacked
  * state.
- * @returns {Promise<void>}
+ * @returns {Promise<{reemerged: Object[], stacked: Object[]}>} The tasks that
+ *   re-emerged and stacked, so the caller can notify the user.
  */
 async function runScheduledReemergence() {
   const now = Date.now();
   const due = await dbGetDueTodos(now);
-  let reemerged = 0;
-  let stacked = 0;
+  const reemerged = [];
+  const stacked = [];
 
   // First pass: re-emerge completed tasks, group due active tasks by repeat.
   const activeByRepeat = new Map();
@@ -1017,7 +1019,7 @@ async function runScheduledReemergence() {
         todo.subtasks = todo.subtasks.map(s => ({ ...s, done: false }));
       }
       await dbPut(todo);
-      reemerged++;
+      reemerged.push(todo);
     } else {
       if (!activeByRepeat.has(todo.repeat)) activeByRepeat.set(todo.repeat, []);
       activeByRepeat.get(todo.repeat).push(todo);
@@ -1039,12 +1041,118 @@ async function runScheduledReemergence() {
         todo.nextRepeatDate = final;
       }
       await dbPut(todo);
-      stacked++;
+      stacked.push(todo);
     }
   }
 
-  if (reemerged === 0 && stacked === 0) return;
-  console.log(`Scheduled re-emergence: ${reemerged} task(s) re-emerged, ${stacked} task(s) stacked`);
+  if (reemerged.length > 0 || stacked.length > 0) {
+    console.log(`Scheduled re-emergence: ${reemerged.length} task(s) re-emerged, ${stacked.length} task(s) stacked`);
+  }
+  return { reemerged, stacked };
+}
+
+// ── Load-time Notification ────────────────────────────────────
+
+const NOTIF_HISTORY_KEY = 'notifHistory';
+const NOTIF_HISTORY_MAX = 50;
+
+/** Whether the user has enabled notifications (Settings → Notifications). */
+function notificationsEnabled() {
+  return JSON.parse(localStorage.getItem('notifEnabled') || 'false');
+}
+
+/**
+ * Records a load-time notification in the history (newest first, capped).
+ * @param {{ ts: number; title: string; body: string }} entry
+ */
+function recordNotifHistory(entry) {
+  const history = JSON.parse(localStorage.getItem(NOTIF_HISTORY_KEY) || '[]');
+  history.unshift(entry);
+  if (history.length > NOTIF_HISTORY_MAX) history.length = NOTIF_HISTORY_MAX;
+  localStorage.setItem(NOTIF_HISTORY_KEY, JSON.stringify(history));
+}
+
+/** Renders the notification history list in Settings → Notifications. */
+function renderNotifHistory() {
+  const el = document.getElementById('notif-history');
+  if (!el) return;
+  const history = JSON.parse(localStorage.getItem(NOTIF_HISTORY_KEY) || '[]');
+  el.innerHTML = '';
+  if (history.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'setting-hint';
+    empty.textContent = 'No notifications yet.';
+    el.appendChild(empty);
+    return;
+  }
+  history.forEach(entry => {
+    const item = document.createElement('div');
+    item.className = 'notif-history-item';
+    const title = document.createElement('div');
+    title.className = 'notif-history-title';
+    title.textContent = entry.title;
+    const body = document.createElement('div');
+    body.className = 'notif-history-body';
+    body.textContent = entry.body;
+    const when = document.createElement('div');
+    when.className = 'notif-history-when';
+    when.textContent = new Date(entry.ts).toLocaleString();
+    item.append(title, body, when);
+    el.appendChild(item);
+  });
+}
+
+/**
+ * Sends (and records) the load-time notification: tasks that re-emerged or
+ * stacked while the app was closed, plus tasks that newly became urgent.
+ * The OS banner is only sent when notifications are enabled and permission is
+ * granted; the history entry is recorded whenever notifications are enabled,
+ * so the user can review past events in Settings → Notifications.
+ * @param {{ reemerged: Object[], stacked: Object[] }} result - from runScheduledReemergence
+ */
+function notifyLoadEvents({ reemerged, stacked }) {
+  if (!notificationsEnabled()) return;
+
+  const handledIds = new Set([...reemerged, ...stacked].map(t => t.id));
+  const urgentKey = `lastUrgentIds_${currentProfileId}`;
+  const prevUrgent = new Set(JSON.parse(localStorage.getItem(urgentKey) || '[]'));
+
+  const urgentNow = [];
+  for (const t of active) {
+    if (calculateUrgency(t.deadline, t.duration) === 'stressy') urgentNow.push(t);
+  }
+  // Only announce tasks that became urgent since the last load of this profile.
+  const newlyUrgent = urgentNow.filter(t => !prevUrgent.has(t.id) && !handledIds.has(t.id));
+  localStorage.setItem(urgentKey, JSON.stringify(urgentNow.map(t => t.id)));
+
+  const total = reemerged.length + stacked.length + newlyUrgent.length;
+  if (total === 0) return;
+
+  const parts = [];
+  if (reemerged.length) parts.push(`${reemerged.length} re-emerged`);
+  if (stacked.length) parts.push(`${stacked.length} stacked`);
+  if (newlyUrgent.length) parts.push(`${newlyUrgent.length} urgent`);
+  const title = parts.join(', ');
+
+  const lines = [
+    ...reemerged.map(t => `🔄 ${t.text}`),
+    ...stacked.map(t => `📚 ${t.text}`),
+    ...newlyUrgent.map(t => `⚡ ${t.text}`),
+  ];
+  const shown = lines.slice(0, 8);
+  if (lines.length > 8) shown.push(`…and ${lines.length - 8} more`);
+  const body = shown.join('\n');
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, { body, icon: './icon-192x192.png', tag: 'todo-load' });
+    } catch (err) {
+      console.warn('Load notification failed:', err);
+    }
+  }
+
+  recordNotifHistory({ ts: Date.now(), title, body });
+  if (activeSettingsTab === 'notifications') renderNotifHistory();
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -2331,6 +2439,7 @@ function switchSettingsTab(tabName) {
   settingsPagination.parentElement.classList.toggle('hidden', tabName !== 'trash');
   if (tabName === 'trash') renderSettingsTrash();
   if (tabName === 'profiles') renderProfiles();
+  if (tabName === 'notifications') renderNotifHistory();
 }
 
 // Extra filter buttons
@@ -2770,10 +2879,10 @@ async function clearAllData() {
 }
 
 function toggleNotifications(e) {
-  if (e.target.checked) {
-    Notification.requestPermission().then((perm) => {
-      console.log('Notification permission:', perm);
-    });
+  const enabled = e.target.checked;
+  localStorage.setItem('notifEnabled', JSON.stringify(enabled));
+  if (enabled && 'Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
   }
 }
 
@@ -2852,7 +2961,7 @@ async function init() {
   await openDB();
   await ensureStore();
   currentProfileId = await resolveCurrentProfile();
-  await runScheduledReemergence();
+  const reemergeResult = await runScheduledReemergence();
   ({ active, completed, deleted } = await dbGet(currentProfileId));
   active.sort((a, b) => b.createdAt - a.createdAt);
   completed.sort((t1,t2)=>t2.completedAt - t1.completedAt);
@@ -2860,6 +2969,7 @@ async function init() {
     lastUrgencyMap.set(todo.id, calculateUrgency(todo.deadline, todo.duration));
   });
   checkTasks();
+  notifyLoadEvents(reemergeResult);
   // setInterval(() => {
   //   checkTasks();
   //   updateTimers();
@@ -2874,6 +2984,11 @@ async function init() {
   document.getElementById('purge-trash')?.addEventListener('click', purgeAllTrash);
   document.getElementById('clear-data')?.addEventListener('click', clearAllData);
   document.getElementById('notif-toggle')?.addEventListener('change', toggleNotifications);
+  if (document.getElementById('notif-toggle')) document.getElementById('notif-toggle').checked = notificationsEnabled();
+  document.getElementById('clear-notif-history')?.addEventListener('click', () => {
+    localStorage.removeItem(NOTIF_HISTORY_KEY);
+    renderNotifHistory();
+  });
   document.getElementById('motion-toggle')?.addEventListener('change', toggleMotion);
 
   // Theme buttons
