@@ -902,6 +902,63 @@ function nextCrossMoment(repeat, afterMs) {
 }
 
 /**
+ * Counts the fixed crosses of `repeat` in [lastMs, nowMs] in O(1) via
+ * shift-and-compare: shift both timestamps back by the boundary's
+ * wall-clock hour so the boundary lands on MIDNIGHT in the shifted frame,
+ * then count with calendar-tuple arithmetic. `lastMs` itself counts as one
+ * cross (the due stored moment). All times are local.
+ * The shift is a WALL-CLOCK shift (rebuild the tuple with hour - h and let
+ * Date normalize), NOT ms subtraction — subtracting ms across a DST
+ * transition shifts the wall clock by 4 or 6 hours and corrupts the
+ * comparison.
+ * @param {string} repeat
+ * @param {number} lastMs
+ * @param {number} nowMs
+ * @returns {number|null} - null for repeats with no fixed schedule
+ */
+function crossesCount(repeat, lastMs, nowMs) {
+  if (nowMs < lastMs) return 0;
+
+  const shift = (ms, h) => {
+    const t = new Date(ms);
+    return new Date(
+      t.getFullYear(), t.getMonth(), t.getDate(),
+      t.getHours() - h, t.getMinutes(), t.getSeconds(), t.getMilliseconds(),
+    );
+  };
+
+  const l5 = shift(lastMs, 5), n5 = shift(nowMs, 5);
+  const l17 = shift(lastMs, 17), n17 = shift(nowMs, 17);
+
+  const monthKey = (t) => t.getFullYear() * 12 + (t.getMonth() + 1);
+  // DST-safe day ordinal, built from the tuple (not from ms)
+  const dayIndex = (t) =>
+    Math.floor(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86400000);
+
+  // weekday-T midnights in (l, n] (l, n already shifted so T's boundary
+  // is a midnight); the boolean "crossed?" is just this > 0
+  const weekdayOpen = (l, n, T) => {
+    const d = dayIndex(n) - dayIndex(l);
+    const k = (n.getDay() - T + 7) % 7;
+    return Math.max(0, Math.ceil((d - k) / 7));
+  };
+
+  // month-m-1st midnights in (l, n]
+  const monthOpen = (l, n, m) =>
+    Math.floor((monthKey(n) - m) / 12) - Math.floor((monthKey(l) - m) / 12);
+
+  switch (repeat) {
+    case 'daily': return dayIndex(n5) - dayIndex(l5) + 1;
+    case 'weekly': return weekdayOpen(l5, n5, 0) + 1;
+    case 'biweekly': return weekdayOpen(l17, n17, 3) + weekdayOpen(l5, n5, 0) + 1;
+    case 'monthly': return monthKey(n5) - monthKey(l5) + 1;
+    case 'biyearly': return monthOpen(l5, n5, 7) + monthOpen(l5, n5, 1) + 1;
+    case 'yearly': return n5.getFullYear() - l5.getFullYear() + 1;
+    default: return null;
+  }
+}
+
+/**
  * Sets (or deletes) `nextRepeatDate` for a todo based on its repeat value,
  * strictly after `afterMs`. Deletes the field when the repeat is absent or
  * has no fixed schedule (e.g. legacy '30s') — never sets it to null.
@@ -922,7 +979,9 @@ function syncNextRepeatDate(todo, afterMs = Date.now()) {
  * Processes repeatable tasks whose `nextRepeatDate` has arrived — across
  * all profiles. Completed tasks re-emerge: they move back to active and
  * their `nextRepeatDate` re-anchors to the next fixed moment (active tasks
- * always carry one); their `repeatStack` resets to 0. Active tasks stack:
+ * always carry one); the stored cross is consumed by the re-emergence
+ * itself, and any crosses after it (while the app was closed) are added to
+ * `repeatStack`. Active tasks stack:
  * every cross missed since their stored date is added to `repeatStack` and
  * `nextRepeatDate` advances to the next fixed moment, so missed cycles
  * accumulate until the task is completed (which resets the stack). Due
@@ -944,12 +1003,14 @@ async function runScheduledReemergence() {
     if (todo.deleted !== 0 || !todo.repeat) continue;
 
     if (todo.completed === 1) {
-      // Re-emerge: completed → active (re-anchor the next cycle from now;
-      // re-emergence is one-shot — missed crosses while completed don't stack)
+      // Re-emerge: completed → active. The stored cross is consumed by the
+      // re-emergence itself; any crosses after it (app was closed) stack,
+      // matching what would have accumulated had the app been open.
       todo.completed = 0;
       todo.completedAt = null;
+      const crossed = crossesCount(todo.repeat, todo.nextRepeatDate, now);
+      todo.repeatStack = crossed != null ? crossed - 1 : 0;
       syncNextRepeatDate(todo);
-      todo.repeatStack = 0;
       await dbPut(todo);
       reemerged++;
       // Keep the current profile's in-memory arrays in sync.
@@ -959,7 +1020,7 @@ async function runScheduledReemergence() {
         local.completedAt = null;
         if ('nextRepeatDate' in todo) local.nextRepeatDate = todo.nextRepeatDate;
         else delete local.nextRepeatDate;
-        local.repeatStack = 0;
+        local.repeatStack = todo.repeatStack;
         completed.splice(completed.indexOf(local), 1);
         binaryInsert(active, local, (a, b) => b.createdAt - a.createdAt);
       }
@@ -980,13 +1041,7 @@ async function runScheduledReemergence() {
       } else {
         // Count every cross in [stored, now] — the stored date is itself
         // due (it's in the scan), so it counts as a missed cross too.
-        let t = todo.nextRepeatDate;
-        let missed = 0;
-        while (t != null && t <= now) {
-          missed++;
-          t = nextCrossMoment(repeat, t);
-        }
-        todo.repeatStack = (todo.repeatStack || 0) + missed;
+        todo.repeatStack = (todo.repeatStack || 0) + crossesCount(repeat, todo.nextRepeatDate, now);
         todo.nextRepeatDate = final;
       }
       await dbPut(todo);
