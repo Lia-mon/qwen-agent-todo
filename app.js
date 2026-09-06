@@ -1134,14 +1134,16 @@ function notifyLoadEvents({ reemerged, stacked }) {
   if (newlyUrgent.length) parts.push(`${newlyUrgent.length} urgent`);
   const title = parts.join(', ');
 
-  const lines = [
-    ...reemerged.map(t => `🔄 ${t.text}`),
-    ...stacked.map(t => `📚 ${t.text}`),
-    ...newlyUrgent.map(t => `⚡ ${t.text}`),
-  ];
-  const shown = lines.slice(0, 8);
-  if (lines.length > 8) shown.push(`…and ${lines.length - 8} more`);
-  const body = shown.join('\n');
+  const groups = [];
+  if (reemerged.length) groups.push({ label: '🔄 Re-emerged', tasks: reemerged });
+  if (stacked.length) groups.push({ label: '📚 Stacked', tasks: stacked });
+  if (newlyUrgent.length) groups.push({ label: '⚡ Urgent', tasks: newlyUrgent });
+  const MAX_PER_GROUP = 4;
+  const body = groups.map(g => {
+    const names = g.tasks.slice(0, MAX_PER_GROUP).map(t => t.text);
+    const extra = g.tasks.length - names.length;
+    return `${g.label}: ${names.join(', ')}${extra > 0 ? ` +${extra} more` : ''}`;
+  }).join('\n');
 
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
