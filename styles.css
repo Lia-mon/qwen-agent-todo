@@ -1193,6 +1193,14 @@ body {
   transition: all var(--transition-base);
   display: grid;
   place-items: center;
+  position: relative;
+}
+
+/* Invisible hit area ~48px; the visible circle stays 22px. */
+.todo-item .checkbox::before {
+  content: '';
+  position: absolute;
+  inset: -13px;
 }
 
 .todo-item.completed .checkbox {
